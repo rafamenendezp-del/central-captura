@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Captura de pedido</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:720px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864;margin-bottom:2px}
+  .sub{color:#6b7d95;font-size:13px;margin-bottom:16px}
+  h2{font-size:16px;color:#1F3864;margin-bottom:12px}
+
+  .card{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:1.25rem;margin-bottom:1rem}
+  label{display:block;font-size:13px;color:#33465c;margin:12px 0 4px;font-weight:600}
+  label:first-child{margin-top:0}
+  input,select{width:100%;padding:10px;border:1px solid #cdd9e8;border-radius:8px;font-size:14px;background:#fff;color:#1c2a3a}
+  input:focus,select:focus{outline:none;border-color:#1F3864}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  @media(max-width:560px){.form-row,.form-row-3{grid-template-columns:1fr}}
+
+  .btn{display:inline-block;padding:11px 14px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;background:#1F3864;color:#fff}
+  .btn-sm{padding:8px 11px;font-size:13px}
+  .btn-primary{background:#2E7D32;width:100%;padding:14px;font-size:15px}
+  .btn-danger{background:#C0392B}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .btn:active{transform:scale(.99)}
+
+  .foto-drop{border:2px dashed #b9c9df;border-radius:12px;padding:1.4rem;text-align:center;background:#f8fbff;cursor:pointer}
+  .foto-drop:hover{border-color:#1F3864;background:#eef5ff}
+  .foto-drop .ico{color:#1F3864;margin-bottom:6px}
+  .ocr-msg{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:12.5px;line-height:1.4}
+  .ocr-msg.info{background:#E6F1FB;color:#0C447C}
+  .ocr-msg.ok{background:#E4F4E8;color:#1a7f37}
+  .ocr-msg.err{background:#FDECEA;color:#c0392b}
+  .foto-preview{margin-top:12px;text-align:center}
+  .foto-preview img{max-width:100%;max-height:260px;border-radius:10px;border:1px solid #dce6f1}
+  .hidden{display:none}
+
+  .art-linea{border:1px solid #dce6f1;border-radius:10px;padding:12px;margin-bottom:10px;background:#fbfdff}
+  .art-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .art-num{font-size:12px;font-weight:600;color:#1F3864}
+  .art-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .art-row-4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .art-mini-lbl{font-size:10px;color:#8a93a3;margin:0 0 2px 2px;font-weight:600;text-transform:uppercase}
+  .art-linea label{margin:0}
+  @media(max-width:520px){.art-row-2{grid-template-columns:1fr}.art-row-4{grid-template-columns:1fr 1fr}}
+
+  /* overlay camara / pantalla */
+  .overlay{position:fixed;inset:0;background:#0B1220;z-index:50;display:none;flex-direction:column;padding:14px}
+  .overlay.on{display:flex}
+  .overlay video{flex:1;width:100%;border-radius:12px;background:#000;object-fit:contain;min-height:0}
+  .overlay-bar{display:flex;gap:10px;margin-top:12px}
+  .overlay-bar .btn{flex:1;padding:15px}
+
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1c2a3a;color:#fff;
+         padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);
+         opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
+  #toast.on{opacity:1}
+  .aviso-cfg{background:#FDECEA;color:#c0392b;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>CENTRAL · Captura de pedido</h1>
+  <div class="sub">Alfredo / Alejandro — oficina</div>
+
+  <div id="aviso-cfg" class="aviso-cfg hidden"></div>
+
+  <div class="card">
+    <h2>Nuevo pedido</h2>
+
+    <label>Capturista</label>
+    <input type="text" id="ft-capturista" placeholder="Tu nombre" />
+
+    <label>Nombre del cliente *</label>
+    <input type="text" id="ft-cliente" placeholder="Ej. Maria Lopez" />
+
+    <label style="color:#1F3864">Contacto <span style="font-weight:400;color:#791F1F">(al menos uno)</span></label>
+    <div class="form-row">
+      <div><label>Telefono</label><input type="tel" id="ft-telefono" placeholder="222 123 4567" /></div>
+      <div><label>WhatsApp</label><input type="tel" id="ft-whatsapp" placeholder="222 123 4567" /></div>
+    </div>
+
+    <div class="form-row-3" style="margin-top:4px">
+      <div>
+        <label>Tipo de pedido *</label>
+        <select id="ft-tipo">
+          <option value="">Selecciona…</option>
+          <option value="no_hay">No hay (se consigue)</option>
+          <option value="tienda">Recoge en tienda</option>
+          <option value="domicilio">Entrega a domicilio</option>
+        </select>
+      </div>
+      <div>
+        <label>Comprobante</label>
+        <select id="ft-comprobante">
+          <option value="">Selecciona…</option>
+          <option value="factura">Factura</option>
+          <option value="ticket">Ticket</option>
+          <option value="nota_g">Nota G</option>
+          <option value="factura_cxc">Factura CXC</option>
+        </select>
+      </div>
+      <div>
+        <label>Forma de pago</label>
+        <select id="ft-pago">
+          <option value="">Selecciona…</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+          <option value="tarjeta">Tarjeta</option>
+          <option value="deposito_efectivo">Deposito en efectivo</option>
+        </select>
+      </div>
+    </div>
+
+    <label style="margin-top:12px">Fecha estimada de entrega</label>
+    <input type="date" id="ft-fecha-entrega-est" />
+
+    <label style="margin-top:16px;color:#1F3864">Ticket del punto de venta</label>
+    <div class="foto-drop" onclick="document.getElementById('ft-foto').click()">
+      <div class="ico"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+      <div style="font-size:13px;color:#1F3864;font-weight:600">Tomar o subir foto del ticket</div>
+      <div style="font-size:11px;color:#777;margin-top:2px">Lee cantidad, producto, tipo, precio e importe de cada renglon</div>
+    </div>
+    <input type="file" id="ft-foto" accept="image/*" capture="environment" style="display:none" onchange="tomaFotoTicket(this)" />
+    <div class="form-row" style="margin-top:8px">
+      <button class="btn btn-sm" onclick="abrirCamara()">📷 Usar camara</button>
+      <button class="btn btn-sm" onclick="abrirPantalla()">🖥️ Escanear pantalla (TR)</button>
+    </div>
+    <div style="font-size:11px;color:#777;margin-top:6px">La foto del ticket <b>reemplaza</b> los articulos. El escaneo de pantalla los <b>va agregando</b>: captura pagina por pagina cuando el pedido no cabe en una sola.</div>
+    <div class="foto-preview hidden" id="ft-foto-preview"><img id="ft-foto-img" src="" alt="Ticket" /></div>
+    <div id="ft-ocr-msg" class="ocr-msg hidden"></div>
+    <button class="btn btn-sm hidden" id="ft-saltar" style="margin-top:8px" onclick="saltarLecturaTicket()">Saltar lectura y capturar a mano</button>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px">
+      <label style="margin:0;color:#1F3864">Articulos del pedido</label>
+      <button class="btn btn-sm" onclick="agregarLineaArt()">+ Agregar articulo</button>
+    </div>
+    <div style="font-size:11px;color:#777;margin:2px 0 8px">Indica color o modelo en cada articulo.</div>
+    <div id="ft-articulos"></div>
+
+    <label style="margin-top:14px">Total del ticket</label>
+    <input type="number" id="ft-total" placeholder="$" min="0" step="0.01" />
+
+    <button class="btn btn-primary" style="margin-top:16px" onclick="guardarPedidoTel()" id="btn-guardar-tel">Guardar pedido</button>
+  </div>
+</div>
+
+<!-- overlay camara -->
+<div class="overlay" id="ov-cam">
+  <video id="cam-video" autoplay playsinline muted></video>
+  <div class="overlay-bar">
+    <button class="btn btn-danger" onclick="cerrarCamara()">Cancelar</button>
+    <button class="btn btn-primary" style="width:auto" onclick="dispararCamara()">Tomar foto</button>
+  </div>
+</div>
+
+<!-- overlay pantalla -->
+<div class="overlay" id="ov-scr">
+  <video id="scr-video" autoplay playsinline muted></video>
+  <div class="overlay-bar">
+    <button class="btn btn-danger" onclick="terminarPantalla()">Terminar</button>
+    <button class="btn btn-primary" style="width:auto" onclick="capturarPantalla()">Capturar esta pagina</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ============================================================
+   🔴🔴🔴  CONFIGURA AQUÍ TUS DOS DATOS  🔴🔴🔴
+   ============================================================ */
+var SUPABASE_URL  = "https://rbvegwvfmfqxbfovgcyb.supabase.co";   // https://xxxx.supabase.co
+var SUPABASE_ANON = "sb_publishable_ASUo91elaRUnxSmThrlT3g_rKqjZoAo";      // el texto largo que empieza con eyJ...
+/* ============================================================ */
+
+var sb = null;
+try {
+  if (window.supabase && SUPABASE_URL.indexOf('http') === 0) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  }
+} catch (e) { sb = null; }
+if (!sb) {
+  var a = document.getElementById('aviso-cfg');
+  a.textContent = 'Antes de usar: configura tu Project URL y anon key en las lineas marcadas con 🔴 del archivo.';
+  a.classList.remove('hidden');
+}
+
+var ticketBase64 = '';
+var OCR_LEYENDO = false, OCR_TIMER = null;
+
+/* ---------- toast / mensajes ---------- */
+function showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._tmr); t._tmr = setTimeout(function(){ t.classList.remove('on'); }, 3000);
+}
+function ocrMsg(txt, tipo){
+  var el = document.getElementById('ft-ocr-msg');
+  el.textContent = txt; el.className = 'ocr-msg ' + (tipo || 'info');
+  el.classList.remove('hidden');
+}
+
+/* ---------- imagen -> JPG ---------- */
+function canvasAJpg(c, maxLado, calidad){
+  var w=c.width, h=c.height;
+  if (Math.max(w,h) > maxLado){
+    var s=maxLado/Math.max(w,h);
+    var c2=document.createElement('canvas');
+    c2.width=Math.round(w*s); c2.height=Math.round(h*s);
+    c2.getContext('2d').drawImage(c,0,0,c2.width,c2.height);
+    c=c2;
+  }
+  return c.toDataURL('image/jpeg', calidad);
+}
+
+/* ---------- tarjetas de articulo (idénticas a Control Pedidos) ---------- */
+function renumerarArt(){
+  document.querySelectorAll('#ft-articulos .art-linea').forEach(function(l,i){
+    l.querySelector('.art-num').textContent = 'Articulo ' + (i+1);
+  });
+}
+function agregarLineaArt(data){
+  data = data || {};
+  var cont = document.getElementById('ft-articulos');
+  var div = document.createElement('div');
+  div.className = 'art-linea';
+  function q(v){ return v!=null ? String(v).replace(/"/g,'&quot;') : ''; }
+  div.innerHTML =
+    '<div class="art-head"><span class="art-num"></span>'+
+      '<button class="btn btn-sm btn-danger" onclick="quitarLineaArt(this)">Quitar</button></div>'+
+    '<div class="art-row-2">'+
+      '<div><div class="art-mini-lbl">Articulo</div>'+
+        '<input type="text" class="art-prod" placeholder="Producto / descripcion" value="'+(data.producto?q(data.producto):'')+'"></div>'+
+      '<div><div class="art-mini-lbl">Color o modelo</div>'+
+        '<input type="text" class="art-color" placeholder="Color o modelo" value="'+(data.colorModelo?q(data.colorModelo):'')+'"></div>'+
+    '</div>'+
+    '<div class="art-row-4" style="margin-top:8px">'+
+      '<div><div class="art-mini-lbl">Cantidad</div>'+
+        '<input type="number" class="art-cant" placeholder="Cant." min="0" step="0.01" value="'+(data.cantidad!=null?data.cantidad:'')+'"></div>'+
+      '<div><div class="art-mini-lbl">Tipo</div>'+
+        '<input type="text" class="art-unid" placeholder="Tipo/Unidad" value="'+(data.unidad?q(data.unidad):'')+'"></div>'+
+      '<div><div class="art-mini-lbl">Precio</div>'+
+        '<input type="number" class="art-precio" placeholder="$" min="0" step="0.01" value="'+(data.precio!=null&&data.precio!==''?data.precio:'')+'"></div>'+
+      '<div><div class="art-mini-lbl">Importe</div>'+
+        '<input type="number" class="art-importe" placeholder="$" min="0" step="0.01" value="'+(data.importe!=null&&data.importe!==''?data.importe:'')+'"></div>'+
+    '</div>';
+  cont.appendChild(div);
+  renumerarArt();
+}
+function quitarLineaArt(btn){ btn.closest('.art-linea').remove(); renumerarArt(); }
+function quitarLineasVaciasArt(){
+  document.querySelectorAll('#ft-articulos .art-linea').forEach(function(l){
+    var prod=(l.querySelector('.art-prod').value||'').trim();
+    var cant=(l.querySelector('.art-cant').value||'').trim();
+    if(!prod && !cant) l.remove();
+  });
+}
+function leerLineasArt(){
+  var arts=[];
+  document.querySelectorAll('#ft-articulos .art-linea').forEach(function(l){
+    var cantidad=parseFloat(l.querySelector('.art-cant').value);
+    var producto=l.querySelector('.art-prod').value.trim();
+    var unidad=l.querySelector('.art-unid').value.trim();
+    var colorModelo=l.querySelector('.art-color').value.trim();
+    var pr=l.querySelector('.art-precio').value, im=l.querySelector('.art-importe').value;
+    var precio = pr==='' ? '' : parseFloat(pr);
+    var importe = im==='' ? '' : parseFloat(im);
+    if(!producto && !cantidad) return;
+    arts.push({cantidad:cantidad, producto:producto, unidad:unidad, colorModelo:colorModelo, precio:precio, importe:importe});
+  });
+  return arts;
+}
+
+/* ---------- OCR: llama a la Edge Function ---------- */
+// origen: 'foto' (ticket, REEMPLAZA) | 'pantalla' (TR, AGREGA)
+function procesarFotoTicket(d, origen){
+  origen = origen || 'foto';
+  var esPantalla = (origen === 'pantalla');
+  if (!sb){ ocrMsg('Falta configurar Supabase (lineas 🔴).', 'err'); return; }
+
+  ticketBase64 = d;
+  document.getElementById('ft-foto-img').src = d;
+  document.getElementById('ft-foto-preview').classList.remove('hidden');
+  ocrMsg(esPantalla ? 'Leyendo la pantalla capturada...' : 'Leyendo el ticket... (puedes capturar a mano si tarda)', 'info');
+  document.getElementById('ft-saltar').classList.remove('hidden');
+  OCR_LEYENDO = true;
+
+  if (OCR_TIMER) clearTimeout(OCR_TIMER);
+  OCR_TIMER = setTimeout(function(){
+    if (OCR_LEYENDO){
+      OCR_LEYENDO = false;
+      document.getElementById('ft-saltar').classList.add('hidden');
+      ocrMsg('La lectura tardo demasiado. Captura los articulos a mano.', 'err');
+      if (document.querySelectorAll('#ft-articulos .art-linea').length === 0) agregarLineaArt();
+    }
+  }, 45000);
+
+  sb.functions.invoke('leer-imagen', { body: { dataUrl: d, modo: (esPantalla ? 'pantalla' : 'ticket') } })
+    .then(function(resp){
+      OCR_LEYENDO = false;
+      if (OCR_TIMER){ clearTimeout(OCR_TIMER); OCR_TIMER = null; }
+      document.getElementById('ft-saltar').classList.add('hidden');
+
+      if (resp.error){
+        ocrMsg('No se pudo leer: ' + resp.error.message + '. Captura a mano.', 'err');
+        if (document.querySelectorAll('#ft-articulos .art-linea').length === 0) agregarLineaArt();
+        return;
+      }
+      var res = resp.data;
+      if (!res || res.ok === false){
+        ocrMsg((res && res.msg) ? res.msg : 'No se pudo leer. Captura a mano.', 'err');
+        if (document.querySelectorAll('#ft-articulos .art-linea').length === 0) agregarLineaArt();
+        return;
+      }
+      var data = res.data || {};
+      var arts = data.articulos || [];
+
+      if (esPantalla){
+        quitarLineasVaciasArt();
+        arts.forEach(function(a){ agregarLineaArt(a); });
+        if (document.querySelectorAll('#ft-articulos .art-linea').length === 0) agregarLineaArt();
+      } else {
+        document.getElementById('ft-articulos').innerHTML = '';
+        arts.forEach(function(a){ agregarLineaArt(a); });
+        if (!arts.length) agregarLineaArt();
+      }
+
+      if (data.total !== '' && data.total != null) document.getElementById('ft-total').value = data.total;
+
+      var totalLineas = document.querySelectorAll('#ft-articulos .art-linea').length;
+      var aviso = esPantalla
+        ? ('Pagina leida: +' + arts.length + ' articulos (total en el pedido: ' + totalLineas + '). Puedes escanear otra pagina.')
+        : ('Ticket leido: ' + arts.length + ' articulos. Revisa y agrega color/modelo.');
+      var tipo = 'ok';
+      if (data.confianza === 'baja'){ aviso = (esPantalla ? 'Pantalla poco legible. ' : 'Ticket poco legible. ') + 'Revisa los articulos.'; tipo='err'; }
+      if (data.alerta){ aviso = 'OJO: ' + data.alerta + ' - revisa los articulos.'; tipo='err'; }
+      ocrMsg(aviso, tipo);
+    })
+    .catch(function(e){
+      OCR_LEYENDO = false;
+      if (OCR_TIMER){ clearTimeout(OCR_TIMER); OCR_TIMER = null; }
+      document.getElementById('ft-saltar').classList.add('hidden');
+      ocrMsg('Fallo la conexion: ' + (e && e.message ? e.message : e) + '. Captura a mano.', 'err');
+      if (document.querySelectorAll('#ft-articulos .art-linea').length === 0) agregarLineaArt();
+    });
+}
+
+function saltarLecturaTicket(){
+  OCR_LEYENDO = false;
+  if (OCR_TIMER){ clearTimeout(OCR_TIMER); OCR_TIMER = null; }
+  document.getElementById('ft-saltar').classList.add('hidden');
+  ocrMsg('Lectura omitida. Captura los articulos a mano.', 'err');
+  if (document.querySelectorAll('#ft-articulos .art-linea').length === 0) agregarLineaArt();
+}
+
+/* ---------- foto desde archivo (REEMPLAZA) ---------- */
+function tomaFotoTicket(inp){
+  var f = inp.files[0]; if (!f) return;
+  var r = new FileReader();
+  r.onload = function(ev){
+    var img = new Image();
+    img.onload = function(){
+      var c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      c.getContext('2d').drawImage(img,0,0);
+      procesarFotoTicket(canvasAJpg(c, 1400, 0.9), 'foto');
+    };
+    img.src = ev.target.result;
+  };
+  r.readAsDataURL(f);
+  inp.value = '';
+}
+
+/* ---------- camara in-page (REEMPLAZA) ---------- */
+var camStream = null;
+function abrirCamara(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ showToast('Este navegador no permite la camara.'); return; }
+  navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080} }, audio:false })
+    .then(function(s){
+      camStream = s;
+      document.getElementById('cam-video').srcObject = s;
+      document.getElementById('ov-cam').classList.add('on');
+    })
+    .catch(function(e){ showToast('No se pudo abrir la camara (' + (e && e.name ? e.name : 'error') + ').'); });
+}
+function dispararCamara(){
+  var v = document.getElementById('cam-video');
+  if (!camStream || !v.videoWidth) return;
+  var c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  var d = canvasAJpg(c, 1400, 0.9);
+  cerrarCamara();
+  procesarFotoTicket(d, 'foto');
+}
+function cerrarCamara(){
+  if (camStream){ camStream.getTracks().forEach(function(t){ t.stop(); }); camStream = null; }
+  document.getElementById('ov-cam').classList.remove('on');
+}
+
+/* ---------- pantalla in-page (AGREGA, varias paginas) ---------- */
+var scrStream = null;
+function abrirPantalla(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){ showToast('El escaneo de pantalla solo funciona en computadora.'); return; }
+  var opts = { video:{ frameRate:{ideal:8} }, audio:false };
+  try { if (window.CaptureController){ var cc = new CaptureController(); cc.setFocusBehavior && cc.setFocusBehavior('no-focus-change'); opts.controller = cc; } } catch(e){}
+  navigator.mediaDevices.getDisplayMedia(opts)
+    .then(function(s){
+      scrStream = s;
+      document.getElementById('scr-video').srcObject = s;
+      document.getElementById('ov-scr').classList.add('on');
+      s.getVideoTracks()[0].addEventListener('ended', terminarPantalla);
+    })
+    .catch(function(e){ showToast('No se compartio la pantalla.'); });
+}
+function capturarPantalla(){
+  var v = document.getElementById('scr-video');
+  if (!scrStream || !v.videoWidth) return;
+  var c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  var d = canvasAJpg(c, 1568, 0.92);
+  procesarFotoTicket(d, 'pantalla');   // NO cierra: se pueden capturar mas paginas
+}
+function terminarPantalla(){
+  if (scrStream){ scrStream.getTracks().forEach(function(t){ t.stop(); }); scrStream = null; }
+  document.getElementById('ov-scr').classList.remove('on');
+}
+
+/* ---------- guardar en Supabase ---------- */
+function guardarPedidoTel(){
+  var cliente = document.getElementById('ft-cliente').value.trim();
+  var telefono = document.getElementById('ft-telefono').value.trim();
+  var whatsapp = document.getElementById('ft-whatsapp').value.trim();
+  var tipo = document.getElementById('ft-tipo').value;
+  var comprobante = document.getElementById('ft-comprobante').value;
+  var pago = document.getElementById('ft-pago').value;
+  var fechaEst = document.getElementById('ft-fecha-entrega-est').value;
+  var capturista = document.getElementById('ft-capturista').value.trim();
+  var totalRaw = document.getElementById('ft-total').value;
+
+  if (!sb){ showToast('Falta configurar Supabase (lineas 🔴).'); return; }
+  if (!cliente){ showToast('Ingresa el nombre del cliente'); return; }
+  if (!telefono && !whatsapp){ showToast('Ingresa al menos un telefono o WhatsApp'); return; }
+  if (!tipo){ showToast('Selecciona el tipo de pedido'); return; }
+
+  var articulos = leerLineasArt();
+  if (!articulos.length){ showToast('Agrega al menos un articulo'); return; }
+  for (var i=0;i<articulos.length;i++){
+    if (!articulos[i].producto){ showToast('Falta el producto en el articulo '+(i+1)); return; }
+    if (!articulos[i].cantidad || articulos[i].cantidad <= 0){ showToast('Cantidad invalida en el articulo '+(i+1)); return; }
+  }
+
+  var btn = document.getElementById('btn-guardar-tel');
+  btn.textContent = 'Guardando...'; btn.disabled = true;
+
+  var cabecera = {
+    cliente: cliente, telefono: telefono || null, whatsapp: whatsapp || null,
+    tipo: tipo, tipo_comprobante: comprobante || null, forma_pago: pago || null,
+    fecha_entrega_est: fechaEst || null,
+    total_ticket: (totalRaw === '' ? null : parseFloat(totalRaw)),
+    capturado_por: capturista || null
+  };
+
+  sb.from('pedidos').insert(cabecera).select('id').single()
+    .then(function(r1){
+      if (r1.error) throw r1.error;
+      var pid = r1.data.id;
+      var filas = articulos.map(function(a, idx){
+        return {
+          pedido_id: pid, orden: idx+1,
+          producto: a.producto, color_modelo: a.colorModelo || null,
+          cantidad: a.cantidad,
+          unidad: a.unidad || null,
+          precio: (a.precio === '' ? null : a.precio),
+          importe: (a.importe === '' ? null : a.importe)
+        };
+      });
+      return sb.from('pedido_articulos').insert(filas).then(function(r2){
+        if (r2.error) throw r2.error;
+        return articulos.length;
+      });
+    })
+    .then(function(n){
+      btn.textContent = 'Guardar pedido'; btn.disabled = false;
+      limpiarFormTel();
+      showToast('Pedido guardado (' + n + ' articulos)');
+    })
+    .catch(function(err){
+      btn.textContent = 'Guardar pedido'; btn.disabled = false;
+      showToast('No se pudo guardar: ' + (err && err.message ? err.message : err));
+    });
+}
+
+function limpiarFormTel(){
+  ['ft-cliente','ft-telefono','ft-whatsapp','ft-fecha-entrega-est','ft-total'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('ft-tipo').value='';
+  document.getElementById('ft-comprobante').value='';
+  document.getElementById('ft-pago').value='';
+  document.getElementById('ft-foto').value='';
+  document.getElementById('ft-foto-preview').classList.add('hidden');
+  document.getElementById('ft-ocr-msg').classList.add('hidden');
+  document.getElementById('ft-saltar').classList.add('hidden');
+  ticketBase64='';
+  document.getElementById('ft-articulos').innerHTML='';
+  agregarLineaArt();
+}
+
+/* arranque: una linea de articulo lista */
+agregarLineaArt();
+</script>
+</body>
+</html>
