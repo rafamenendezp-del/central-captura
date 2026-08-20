@@ -170,13 +170,11 @@
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 <script>
-/* ============================================================
-   🔴🔴🔴  CONFIGURA AQUÍ TUS DOS DATOS  🔴🔴🔴
-   ============================================================ */
-var SUPABASE_URL  = "https://rbvegwvfmfqxbfovgcyb.supabase.co";   // https://xxxx.supabase.co
-var SUPABASE_ANON = "sb_publishable_ASUo91elaRUnxSmThrlT3g_rKqjZoAo";      // el texto largo que empieza con eyJ...
-/* ============================================================ */
+/* Los datos de conexion viven en config.js (se llena UNA vez y no se vuelve a tocar). */
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
 
 var sb = null;
 try {
@@ -425,7 +423,8 @@ function capturarPantalla(){
   c.width = v.videoWidth; c.height = v.videoHeight;
   c.getContext('2d').drawImage(v,0,0,c.width,c.height);
   var d = canvasAJpg(c, 1568, 0.92);
-  procesarFotoTicket(d, 'pantalla');   // NO cierra: se pueden capturar mas paginas
+  terminarPantalla();                  // cierra la ventana de compartir y regresa a la captura
+  procesarFotoTicket(d, 'pantalla');   // AGREGA y muestra lo leido; para otra pagina, vuelve a Escanear pantalla
 }
 function terminarPantalla(){
   if (scrStream){ scrStream.getTracks().forEach(function(t){ t.stop(); }); scrStream = null; }
