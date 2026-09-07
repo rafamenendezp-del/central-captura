@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Tablero de pedidos</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:820px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864}
+  .sub{color:#6b7d95;font-size:13px;margin-bottom:14px}
+  a.link{color:#1F3864;font-size:13px;text-decoration:none;font-weight:bold}
+
+  .barra{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:12px;margin-bottom:14px;
+         display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+  .barra .campo{flex:1;min-width:150px}
+  label{display:block;font-size:11px;color:#6b7d95;margin-bottom:3px;font-weight:600;text-transform:uppercase}
+  select,input{width:100%;padding:9px;border:1px solid #cdd9e8;border-radius:8px;font-size:14px;background:#fff;color:#1c2a3a}
+  select:focus,input:focus{outline:none;border-color:#1F3864}
+  .btn{padding:10px 14px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;background:#1F3864;color:#fff}
+  .btn:active{transform:scale(.99)}
+  .conteo{font-size:12px;color:#6b7d95;margin-bottom:10px}
+
+  .pedido{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:14px;margin-bottom:12px}
+  .p-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+  .p-cliente{font-size:16px;font-weight:bold;color:#1c2a3a}
+  .p-meta{font-size:12px;color:#6b7d95;margin-top:2px}
+  .badges{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .badge{padding:4px 9px;border-radius:12px;font-size:11px;font-weight:bold}
+  .b-tipo{background:#E6F1FB;color:#0C447C}
+  .est{color:#fff}
+  .e-gris{background:#7a889c}.e-azul{background:#1F6FB2}.e-mora{background:#6C4AB6}
+  .e-ambar{background:#C08A1E}.e-verde{background:#2E7D32}.e-rojo{background:#C0392B}
+
+  .p-datos{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:13px;margin:8px 0}
+  .p-datos div span{color:#6b7d95}
+  @media(max-width:520px){.p-datos{grid-template-columns:1fr}}
+
+  .arts{margin-top:8px;border-top:1px solid #eef2f7;padding-top:8px}
+  .arts summary{cursor:pointer;font-size:13px;color:#1F3864;font-weight:bold}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+  th,td{padding:6px 6px;text-align:left;border-bottom:1px solid #eef2f7}
+  th{color:#6b7d95;font-size:11px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+
+  .p-accion{display:flex;gap:8px;align-items:end;margin-top:10px;flex-wrap:wrap}
+  .p-accion .campo{min-width:220px;flex:1}
+
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1c2a3a;color:#fff;
+         padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);
+         opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
+  #toast.on{opacity:1}
+  .aviso{padding:12px;border-radius:10px;font-size:13px;margin-bottom:12px}
+  .aviso.err{background:#FDECEA;color:#c0392b}
+  .aviso.info{background:#E6F1FB;color:#0C447C}
+  .vacio{text-align:center;color:#6b7d95;padding:30px 10px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>CENTRAL · Tablero de pedidos</h1>
+  <div class="sub">Pedidos capturados · <a class="link" href="index.html">+ Capturar nuevo</a></div>
+
+  <div id="aviso-cfg" class="aviso err" style="display:none"></div>
+
+  <div class="barra">
+    <div class="campo">
+      <label>Estatus</label>
+      <select id="f-estatus" onchange="render()"><option value="">Todos</option></select>
+    </div>
+    <div class="campo">
+      <label>Tipo</label>
+      <select id="f-tipo" onchange="render()">
+        <option value="">Todos</option>
+        <option value="no_hay">No hay</option>
+        <option value="tienda">Recoge en tienda</option>
+        <option value="domicilio">Domicilio</option>
+      </select>
+    </div>
+    <div class="campo">
+      <label>Buscar cliente</label>
+      <input type="text" id="f-cliente" placeholder="Nombre…" oninput="render()">
+    </div>
+    <button class="btn" onclick="cargar()">↻ Actualizar</button>
+  </div>
+
+  <div class="conteo" id="conteo"></div>
+  <div id="lista"></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+if (!sb){
+  var a = document.getElementById('aviso-cfg');
+  a.textContent = 'Falta config.js con tu Project URL y anon key.';
+  a.style.display = 'block';
+}
+
+// Etapas (segun el mapa). value -> [etiqueta, color]
+var ESTADOS = [
+  ['captura',          'Capturado',              'e-gris'],
+  ['mercancia_pedida', 'Mercancía pedida',       'e-mora'],
+  ['en_transportes',   'En transportes',         'e-mora'],
+  ['en_tr',            'En tienda (TR)',          'e-mora'],
+  ['por_asignar',      'Por asignar',            'e-azul'],
+  ['asignado',         'Asignado',               'e-azul'],
+  ['surtiendo',        'Surtiendo',              'e-ambar'],
+  ['listo',            'Listo',                  'e-verde'],
+  ['en_camioneta',     'Asignada a camioneta',   'e-azul'],
+  ['en_ruta',          'En ruta',                'e-azul'],
+  ['entregado',        'Entregado',              'e-verde'],
+  ['cancelado',        'Cancelado',              'e-rojo']
+];
+var TIPOS = { no_hay:'No hay', tienda:'Recoge en tienda', domicilio:'Domicilio' };
+var COMPROB = { factura:'Factura', ticket:'Ticket', nota_g:'Nota G', factura_cxc:'Factura CXC' };
+var PAGOS = { efectivo:'Efectivo', transferencia:'Transferencia', tarjeta:'Tarjeta', deposito_efectivo:'Depósito en efectivo' };
+
+function estadoInfo(v){
+  for (var i=0;i<ESTADOS.length;i++){ if (ESTADOS[i][0]===v) return ESTADOS[i]; }
+  return [v, v || '—', 'e-gris'];
+}
+
+var PEDIDOS = [];
+
+function showToast(m){
+  var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on');},2600);
+}
+function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fecha(iso){ if(!iso) return '—'; var d=new Date(iso); return d.toLocaleDateString('es-MX')+' '+d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}); }
+function money(n){ return (n==null||n==='') ? '—' : ('$'+Number(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})); }
+
+// llena el filtro de estatus
+(function(){ var s=document.getElementById('f-estatus'); ESTADOS.forEach(function(e){ var o=document.createElement('option'); o.value=e[0]; o.textContent=e[1]; s.appendChild(o); }); })();
+
+function cargar(){
+  if (!sb){ return; }
+  document.getElementById('conteo').textContent = 'Cargando…';
+  sb.from('pedidos').select('*, pedido_articulos(*)').order('creado_en', { ascending:false })
+    .then(function(r){
+      if (r.error){ document.getElementById('conteo').textContent=''; showToast('Error al cargar: '+r.error.message); return; }
+      PEDIDOS = r.data || [];
+      render();
+    })
+    .catch(function(e){ showToast('Fallo la conexión: '+(e&&e.message?e.message:e)); });
+}
+
+function render(){
+  var fe = document.getElementById('f-estatus').value;
+  var ft = document.getElementById('f-tipo').value;
+  var fc = (document.getElementById('f-cliente').value||'').toLowerCase().trim();
+
+  var lista = PEDIDOS.filter(function(p){
+    if (fe && p.estatus !== fe) return false;
+    if (ft && p.tipo !== ft) return false;
+    if (fc && !((p.cliente||'').toLowerCase().indexOf(fc) >= 0)) return false;
+    return true;
+  });
+
+  document.getElementById('conteo').textContent = lista.length + ' pedido(s)' + (PEDIDOS.length!==lista.length ? (' de '+PEDIDOS.length) : '');
+
+  var cont = document.getElementById('lista');
+  if (!lista.length){ cont.innerHTML = '<div class="vacio">No hay pedidos con esos filtros.</div>'; return; }
+
+  cont.innerHTML = lista.map(function(p){
+    var ei = estadoInfo(p.estatus);
+    var arts = (p.pedido_articulos||[]).slice().sort(function(a,b){ return (a.orden||0)-(b.orden||0); });
+    var filas = arts.map(function(a){
+      return '<tr><td>'+esc(a.producto)+(a.color_modelo?(' <span style="color:#6b7d95">('+esc(a.color_modelo)+')</span>'):'')+'</td>'+
+             '<td class="num">'+esc(a.cantidad)+'</td><td>'+esc(a.unidad||'')+'</td>'+
+             '<td class="num">'+money(a.precio)+'</td><td class="num">'+money(a.importe)+'</td></tr>';
+    }).join('');
+
+    var opts = ESTADOS.map(function(e){ return '<option value="'+e[0]+'"'+(e[0]===p.estatus?' selected':'')+'>'+e[1]+'</option>'; }).join('');
+
+    var contacto = [];
+    if (p.telefono) contacto.push('Tel: '+esc(p.telefono));
+    if (p.whatsapp) contacto.push('WA: '+esc(p.whatsapp));
+
+    return '<div class="pedido">'+
+      '<div class="p-top"><div><div class="p-cliente">'+esc(p.cliente||'(sin nombre)')+'</div>'+
+        '<div class="p-meta">'+contacto.join(' · ')+'</div></div>'+
+        '<div class="p-meta" style="text-align:right">'+fecha(p.creado_en)+'</div></div>'+
+      '<div class="badges">'+
+        '<span class="badge b-tipo">'+(TIPOS[p.tipo]||p.tipo||'—')+'</span>'+
+        '<span class="badge est '+ei[2]+'">'+ei[1]+'</span>'+
+      '</div>'+
+      '<div class="p-datos">'+
+        '<div><span>Comprobante:</span> '+(COMPROB[p.tipo_comprobante]||'—')+'</div>'+
+        '<div><span>Pago:</span> '+(PAGOS[p.forma_pago]||'—')+'</div>'+
+        '<div><span>Entrega est.:</span> '+(p.fecha_entrega_est||'—')+'</div>'+
+        '<div><span>Total ticket:</span> '+money(p.total_ticket)+'</div>'+
+        '<div><span>Capturista:</span> '+esc(p.capturado_por||'—')+'</div>'+
+      '</div>'+
+      '<details class="arts"><summary>'+arts.length+' artículo(s)</summary>'+
+        '<table><thead><tr><th>Producto</th><th class="num">Cant.</th><th>Tipo</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead>'+
+        '<tbody>'+filas+'</tbody></table></details>'+
+      '<div class="p-accion"><div class="campo"><label>Cambiar estatus</label>'+
+        '<select onchange="cambiarEstatus(\''+p.id+'\', this.value)">'+opts+'</select></div></div>'+
+    '</div>';
+  }).join('');
+}
+
+function cambiarEstatus(id, nuevo){
+  if (!sb) return;
+  sb.from('pedidos').update({ estatus:nuevo }).eq('id', id)
+    .then(function(r){
+      if (r.error){ showToast('No se pudo cambiar: '+r.error.message); return; }
+      for (var i=0;i<PEDIDOS.length;i++){ if (PEDIDOS[i].id===id){ PEDIDOS[i].estatus=nuevo; break; } }
+      render();
+      var ei = estadoInfo(nuevo);
+      showToast('Estatus actualizado: '+ei[1]);
+    })
+    .catch(function(e){ showToast('Fallo: '+(e&&e.message?e.message:e)); });
+}
+
+if (sb) cargar();
+</script>
+</body>
+</html>
