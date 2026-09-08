@@ -58,9 +58,13 @@
 </style>
 </head>
 <body>
+<div id="gate" style="position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100">Verificando sesión…</div>
 <div class="app">
   <h1>CENTRAL · Tablero de pedidos</h1>
-  <div class="sub">Pedidos capturados · <a class="link" href="index.html">+ Capturar nuevo</a></div>
+  <div class="sub" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <span>Pedidos capturados · <a class="link" href="index.html">+ Capturar nuevo</a></span>
+    <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
+  </div>
 
   <div id="aviso-cfg" class="aviso err" style="display:none"></div>
 
@@ -223,7 +227,18 @@ function cambiarEstatus(id, nuevo){
     .catch(function(e){ showToast('Fallo: '+(e&&e.message?e.message:e)); });
 }
 
-if (sb) cargar();
+function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href = 'login.html'; }); }
+if (sb){
+  sb.auth.getSession().then(function(r){
+    if (!r.data.session){ location.href = 'login.html'; return; }
+    var email = (r.data.session.user && r.data.session.user.email) || '';
+    document.getElementById('usuario').textContent = 'Usuario: ' + email.split('@')[0];
+    document.getElementById('gate').style.display = 'none';
+    cargar();
+  });
+} else {
+  document.getElementById('gate').style.display = 'none';
+}
 </script>
 </body>
 </html>
