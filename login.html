@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Entrar</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,Helvetica,sans-serif;background:#1F3864;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .box{background:#fff;border-radius:14px;padding:28px 22px;width:100%;max-width:360px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+  h1{color:#1F3864;font-size:26px;text-align:center;letter-spacing:1px}
+  .sub{color:#6b7d95;font-size:13px;text-align:center;margin:2px 0 20px}
+  label{display:block;font-size:12px;color:#33465c;font-weight:600;margin:14px 0 4px}
+  input{width:100%;padding:12px;border:1px solid #cdd9e8;border-radius:8px;font-size:16px}
+  input:focus{outline:none;border-color:#1F3864}
+  button{width:100%;margin-top:20px;padding:14px;border:none;border-radius:8px;background:#2E7D32;color:#fff;font-size:16px;font-weight:bold;cursor:pointer}
+  button[disabled]{opacity:.6;cursor:not-allowed}
+  .msg{margin-top:14px;padding:10px 12px;border-radius:8px;font-size:13px;display:none}
+  .msg.err{background:#FDECEA;color:#c0392b;display:block}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>CENTRAL</h1>
+  <div class="sub">Inicia sesión</div>
+  <div id="aviso" class="msg err"></div>
+
+  <label>Número de usuario</label>
+  <input id="numero" type="text" inputmode="numeric" autocomplete="username" placeholder="Ej. 1234" onkeydown="if(event.key==='Enter')document.getElementById('pass').focus()">
+
+  <label>Contraseña</label>
+  <input id="pass" type="password" autocomplete="current-password" placeholder="Tu contraseña" onkeydown="if(event.key==='Enter')entrar()">
+
+  <button id="btn" onclick="entrar()">Entrar</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+
+function aviso(txt){ var a=document.getElementById('aviso'); a.textContent=txt; a.classList.add('err'); a.style.display='block'; }
+
+if (!sb){
+  aviso('Falta config.js con tu Project URL y anon key.');
+} else {
+  // si ya hay sesion, entra directo
+  sb.auth.getSession().then(function(r){ if (r.data.session) location.href = 'tablero.html'; });
+}
+
+function entrar(){
+  if (!sb){ aviso('Falta config.js.'); return; }
+  var numero = document.getElementById('numero').value.trim();
+  var pass = document.getElementById('pass').value;
+  if (!numero || !pass){ aviso('Escribe tu número y tu contraseña.'); return; }
+
+  var email = numero + '@central.local';
+  var btn = document.getElementById('btn');
+  btn.textContent = 'Entrando…'; btn.disabled = true;
+  document.getElementById('aviso').style.display = 'none';
+
+  sb.auth.signInWithPassword({ email: email, password: pass }).then(function(r){
+    if (r.error){
+      btn.textContent = 'Entrar'; btn.disabled = false;
+      var m = (r.error.message || '').toLowerCase();
+      if (m.indexOf('confirm') >= 0){
+        aviso('Ese usuario no está confirmado. En Supabase (Authentication → Users) márcalo como confirmado.');
+      } else {
+        aviso('Número o contraseña incorrectos.');
+      }
+      return;
+    }
+    location.href = 'tablero.html';
+  }).catch(function(e){
+    btn.textContent = 'Entrar'; btn.disabled = false;
+    aviso('Falló la conexión: ' + (e && e.message ? e.message : e));
+  });
+}
+</script>
+</body>
+</html>
