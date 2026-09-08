@@ -63,9 +63,13 @@
 </style>
 </head>
 <body>
+<div id="gate" style="position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100">Verificando sesión…</div>
 <div class="app">
   <h1>CENTRAL · Captura de pedido</h1>
-  <div class="sub">Alfredo / Alejandro — oficina</div>
+  <div class="sub" style="display:flex;justify-content:space-between;align-items:center">
+    <span id="usuario">oficina</span>
+    <a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a>
+  </div>
 
   <div id="aviso-cfg" class="aviso-cfg hidden"></div>
 
@@ -186,6 +190,19 @@ if (!sb) {
   var a = document.getElementById('aviso-cfg');
   a.textContent = 'Antes de usar: configura tu Project URL y anon key en las lineas marcadas con 🔴 del archivo.';
   a.classList.remove('hidden');
+}
+
+/* ---------- reja de sesion ---------- */
+function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href = 'login.html'; }); }
+if (sb){
+  sb.auth.getSession().then(function(r){
+    if (!r.data.session){ location.href = 'login.html'; return; }
+    var email = (r.data.session.user && r.data.session.user.email) || '';
+    document.getElementById('usuario').textContent = 'Usuario: ' + email.split('@')[0];
+    document.getElementById('gate').style.display = 'none';
+  });
+} else {
+  document.getElementById('gate').style.display = 'none';
 }
 
 var ticketBase64 = '';
