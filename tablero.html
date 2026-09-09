@@ -240,44 +240,49 @@ function siguientes(tipo, estatus){
     en_ruta:'Salió a ruta',
     entregado:'Entregado'
   };
-  function p(to){ return [to, L[to]]; }
+  function p(to){ return [to, L[to]||to]; }
+  var r = [];
 
   if (tipo === 'no_hay'){
     switch(estatus){
-      case 'captura':          return [p('mercancia_pedida')];
-      case 'mercancia_pedida': return [p('en_transportes')];
-      case 'en_transportes':   return [p('en_tr')];
-      case 'en_tr':            return [p('por_asignar')];
-      case 'por_asignar':      return [p('asignado')];
-      case 'asignado':         return [p('surtiendo')];
-      case 'surtiendo':        return [p('listo')];
-      case 'listo':            return [['entregado','Entregado (recoge en tienda)'], ['en_camioneta','Pasar a reparto a domicilio']];
-      case 'en_camioneta':     return [p('en_ruta')];
-      case 'en_ruta':          return [p('entregado')];
-      default: return [];
+      case 'captura':          r=[p('mercancia_pedida')]; break;
+      case 'mercancia_pedida': r=[p('en_transportes')]; break;
+      case 'en_transportes':   r=[p('en_tr')]; break;
+      case 'en_tr':            r=[p('por_asignar')]; break;
+      case 'por_asignar':      r=[p('asignado')]; break;
+      case 'asignado':         r=[p('surtiendo')]; break;
+      case 'surtiendo':        r=[p('listo')]; break;
+      case 'listo':            r=[['entregado','Entregado (recoge en tienda)'], ['en_camioneta','Pasar a reparto a domicilio']]; break;
+      case 'en_camioneta':     r=[p('en_ruta')]; break;
+      case 'en_ruta':          r=[p('entregado')]; break;
     }
-  }
-  if (tipo === 'domicilio'){
+  } else if (tipo === 'domicilio'){
     switch(estatus){
-      case 'captura':      return [p('por_asignar')];
-      case 'por_asignar':  return [p('asignado')];
-      case 'asignado':     return [p('surtiendo')];
-      case 'surtiendo':    return [p('listo')];
-      case 'listo':        return [p('en_camioneta')];
-      case 'en_camioneta': return [p('en_ruta')];
-      case 'en_ruta':      return [p('entregado')];
-      default: return [];
+      case 'captura':      r=[p('por_asignar')]; break;
+      case 'por_asignar':  r=[p('asignado')]; break;
+      case 'asignado':     r=[p('surtiendo')]; break;
+      case 'surtiendo':    r=[p('listo')]; break;
+      case 'listo':        r=[p('en_camioneta')]; break;
+      case 'en_camioneta': r=[p('en_ruta')]; break;
+      case 'en_ruta':      r=[p('entregado')]; break;
+    }
+  } else { // tienda y cualquier otro
+    switch(estatus){
+      case 'captura':     r=[p('por_asignar')]; break;
+      case 'por_asignar': r=[p('asignado')]; break;
+      case 'asignado':    r=[p('surtiendo')]; break;
+      case 'surtiendo':   r=[['listo','Marcar listo']]; break;
+      case 'listo':       r=[['entregado','Entregado (recoge en tienda)']]; break;
     }
   }
-  // tienda (y cualquier otro)
-  switch(estatus){
-    case 'captura':     return [p('por_asignar')];
-    case 'por_asignar': return [p('asignado')];
-    case 'asignado':    return [p('surtiendo')];
-    case 'surtiendo':   return [['listo','Marcar listo']];
-    case 'listo':       return [['entregado','Entregado (recoge en tienda)']];
-    default: return [];
-  }
+
+  if (r.length) return r;
+  // Rescate: pedidos viejos o en una etapa fuera de su ruta igual pueden avanzar.
+  if (estatus === 'entregado' || estatus === 'cancelado') return [];
+  var CANON = ['captura','mercancia_pedida','en_transportes','en_tr','por_asignar','asignado','surtiendo','listo','en_camioneta','en_ruta','entregado'];
+  var i = CANON.indexOf(estatus);
+  if (i >= 0 && i < CANON.length - 1) return [p(CANON[i+1])];
+  return [];
 }
 
 function avanzar(id, to){
