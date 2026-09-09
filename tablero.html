@@ -186,6 +186,15 @@ function render(){
 
     var opts = ESTADOS.map(function(e){ return '<option value="'+e[0]+'"'+(e[0]===p.estatus?' selected':'')+'>'+e[1]+'</option>'; }).join('');
 
+    var nexts = siguientes(p.tipo, p.estatus);
+    var btns = nexts.map(function(n){
+      var col = (n[0]==='entregado') ? '#2E7D32' : ((n[0]==='en_camioneta'||n[0]==='en_ruta') ? '#1F6FB2' : '#1F3864');
+      return '<button class="btn" style="background:'+col+'" onclick="avanzar(\''+p.id+'\',\''+n[0]+'\')">'+n[1]+'</button>';
+    }).join(' ');
+    var esFinal = (p.estatus==='entregado' || p.estatus==='cancelado');
+    var cancelar = esFinal ? '' : '<button class="btn" style="background:#C0392B" onclick="avanzar(\''+p.id+'\',\'cancelado\')">Cancelar</button>';
+    var finalMsg = '<div style="color:#6b7d95;font-size:13px;font-weight:bold">Pedido '+(p.estatus==='entregado'?'entregado ✅':'cancelado')+'</div>';
+
     var contacto = [];
     if (p.telefono) contacto.push('Tel: '+esc(p.telefono));
     if (p.whatsapp) contacto.push('WA: '+esc(p.whatsapp));
@@ -208,10 +217,72 @@ function render(){
       '<details class="arts"><summary>'+arts.length+' artículo(s)</summary>'+
         '<table><thead><tr><th>Producto</th><th class="num">Cant.</th><th>Tipo</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead>'+
         '<tbody>'+filas+'</tbody></table></details>'+
-      '<div class="p-accion"><div class="campo"><label>Cambiar estatus</label>'+
-        '<select onchange="cambiarEstatus(\''+p.id+'\', this.value)">'+opts+'</select></div></div>'+
+      '<div class="p-accion" style="display:block">'+
+        (esFinal ? finalMsg : ('<div style="display:flex;gap:8px;flex-wrap:wrap">'+btns+' '+cancelar+'</div>'))+
+        '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:#6b7d95">Cambiar manualmente</summary>'+
+          '<select style="margin-top:6px;max-width:280px" onchange="cambiarEstatus(\''+p.id+'\', this.value)">'+opts+'</select></details>'+
+      '</div>'+
     '</div>';
   }).join('');
+}
+
+// Flujo real por tipo de pedido: dado el estatus actual, cuales son los siguientes pasos.
+function siguientes(tipo, estatus){
+  var L = {
+    mercancia_pedida:'Mercancía pedida al proveedor',
+    en_transportes:'Llegó a transportes (CDMX)',
+    en_tr:'Llegó a la tienda',
+    por_asignar:'Poner "por asignar"',
+    asignado:'Asignar despachador',
+    surtiendo:'Empezar a surtir',
+    listo:'Marcar listo',
+    en_camioneta:'Pasar a reparto',
+    en_ruta:'Salió a ruta',
+    entregado:'Entregado'
+  };
+  function p(to){ return [to, L[to]]; }
+
+  if (tipo === 'no_hay'){
+    switch(estatus){
+      case 'captura':          return [p('mercancia_pedida')];
+      case 'mercancia_pedida': return [p('en_transportes')];
+      case 'en_transportes':   return [p('en_tr')];
+      case 'en_tr':            return [p('por_asignar')];
+      case 'por_asignar':      return [p('asignado')];
+      case 'asignado':         return [p('surtiendo')];
+      case 'surtiendo':        return [p('listo')];
+      case 'listo':            return [['entregado','Entregado (recoge en tienda)'], ['en_camioneta','Pasar a reparto a domicilio']];
+      case 'en_camioneta':     return [p('en_ruta')];
+      case 'en_ruta':          return [p('entregado')];
+      default: return [];
+    }
+  }
+  if (tipo === 'domicilio'){
+    switch(estatus){
+      case 'captura':      return [p('por_asignar')];
+      case 'por_asignar':  return [p('asignado')];
+      case 'asignado':     return [p('surtiendo')];
+      case 'surtiendo':    return [p('listo')];
+      case 'listo':        return [p('en_camioneta')];
+      case 'en_camioneta': return [p('en_ruta')];
+      case 'en_ruta':      return [p('entregado')];
+      default: return [];
+    }
+  }
+  // tienda (y cualquier otro)
+  switch(estatus){
+    case 'captura':     return [p('por_asignar')];
+    case 'por_asignar': return [p('asignado')];
+    case 'asignado':    return [p('surtiendo')];
+    case 'surtiendo':   return [['listo','Marcar listo']];
+    case 'listo':       return [['entregado','Entregado (recoge en tienda)']];
+    default: return [];
+  }
+}
+
+function avanzar(id, to){
+  if (to === 'cancelado' && !confirm('¿Cancelar este pedido? Esta acción lo saca del flujo.')) return;
+  cambiarEstatus(id, to);
 }
 
 function cambiarEstatus(id, nuevo){
