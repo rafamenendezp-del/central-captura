@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Pedidos libres</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:640px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864}
+  .sub{font-size:13px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  a.link{color:#1F3864;font-size:13px;text-decoration:none;font-weight:bold}
+  .card{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:14px;margin-bottom:12px}
+  label{display:block;font-size:11px;color:#6b7d95;margin-bottom:3px;font-weight:600;text-transform:uppercase}
+  select{width:100%;padding:11px;border:1px solid #cdd9e8;border-radius:8px;font-size:15px;background:#fff}
+  select:focus{outline:none;border-color:#1F3864}
+  .quien{background:#1F3864;color:#fff;border:none}
+  .btn{padding:12px 16px;border:none;border-radius:8px;font-size:15px;font-weight:bold;cursor:pointer;background:#2E7D32;color:#fff;width:100%}
+  .btn.gris{background:#7a889c;width:auto;padding:8px 12px;font-size:13px}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .ped-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start}
+  .ped-cli{font-size:16px;font-weight:bold}
+  .ped-meta{font-size:12px;color:#6b7d95;margin-top:2px}
+  .badge{padding:3px 9px;border-radius:12px;font-size:11px;font-weight:bold;background:#E6F1FB;color:#0C447C}
+  .ped-datos{font-size:13px;color:#33465c;margin:8px 0}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1c2a3a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
+  #toast.on{opacity:1}
+  #toast.win{background:#2E7D32}#toast.lose{background:#C0392B}
+  .aviso{background:#FDECEA;color:#c0392b;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
+  .conteo{font-size:12px;color:#6b7d95;margin:4px 0 10px;display:flex;justify-content:space-between;align-items:center}
+  .vacio{text-align:center;color:#6b7d95;padding:30px 10px;font-size:14px}
+</style>
+</head>
+<body>
+<div id="gate" style="position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100">Verificando sesión…</div>
+<div class="app">
+  <h1>CENTRAL · Pedidos libres</h1>
+  <div class="sub">
+    <span>Toma tu pedido · <a class="link" href="tablero.html">Tablero</a></span>
+    <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
+  </div>
+
+  <div id="aviso" class="aviso"></div>
+
+  <div class="card">
+    <label>¿Quién eres? (despachador)</label>
+    <select id="quien" class="quien" onchange="guardarQuien()"><option value="">Elige tu número…</option></select>
+  </div>
+
+  <div class="conteo"><span id="conteo"></span><button class="btn gris" onclick="cargar()">↻ Actualizar</button></div>
+  <div id="lista"></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+
+function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href='login.html'; }); }
+if (sb){
+  sb.auth.getSession().then(function(r){
+    if (!r.data.session){ location.href='login.html'; return; }
+    var email=(r.data.session.user&&r.data.session.user.email)||'';
+    document.getElementById('usuario').textContent='Usuario: '+email.split('@')[0];
+    document.getElementById('gate').style.display='none';
+    iniciar();
+  });
+} else {
+  document.getElementById('gate').style.display='none';
+  var a=document.getElementById('aviso'); a.textContent='Falta config.js con tu Project URL y anon key.'; a.style.display='block';
+}
+
+var LIBRES = [], DESP = [], QUIEN = null, TIMER = null;
+
+function showToast(m, tipo){ var t=document.getElementById('toast'); t.textContent=m; t.className='on'+(tipo?(' '+tipo):''); clearTimeout(t._t); t._t=setTimeout(function(){t.className='';},2800); }
+function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function money(n){ return (n==null||n==='')?'—':('$'+Number(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})); }
+var TIPOS = { no_hay:'No hay', tienda:'Recoge en tienda', domicilio:'Domicilio' };
+
+function iniciar(){
+  // cargar despachadores activos para el selector "¿quién eres?"
+  sb.from('despachadores').select('numero,nombre').eq('activo', true).order('numero').then(function(r){
+    if (!r.error){
+      DESP = r.data || [];
+      var s = document.getElementById('quien');
+      DESP.forEach(function(d){
+        var o=document.createElement('option'); o.value=d.numero;
+        o.textContent = d.numero + (d.nombre ? (' · '+d.nombre) : '');
+        s.appendChild(o);
+      });
+      var guardado = localStorage.getItem('central_desp_numero');
+      if (guardado){ s.value = guardado; guardarQuien(); }
+    }
+    cargar();
+  });
+  // refresco automatico cada 6s
+  if (TIMER) clearInterval(TIMER);
+  TIMER = setInterval(cargar, 6000);
+}
+
+function guardarQuien(){
+  var num = document.getElementById('quien').value;
+  QUIEN = DESP.filter(function(d){ return d.numero===num; })[0] || null;
+  if (num) localStorage.setItem('central_desp_numero', num);
+  render();
+}
+
+function cargar(){
+  if (!sb) return;
+  sb.from('pedidos')
+    .select('id,cliente,tipo,total_ticket,creado_en, pedido_articulos(id)')
+    .eq('estatus','por_asignar').is('despachador_numero', null)
+    .order('creado_en', { ascending:true })
+    .then(function(r){
+      if (r.error){ showToast('Error: '+r.error.message,'lose'); return; }
+      LIBRES = r.data || [];
+      render();
+    });
+}
+
+function render(){
+  document.getElementById('conteo').textContent = LIBRES.length + ' pedido(s) libre(s)';
+  var c = document.getElementById('lista');
+  if (!LIBRES.length){ c.innerHTML = '<div class="vacio">No hay pedidos libres ahora mismo.</div>'; return; }
+  var hayQuien = !!QUIEN;
+  c.innerHTML = LIBRES.map(function(p){
+    var nArts = (p.pedido_articulos||[]).length;
+    return '<div class="card">'+
+      '<div class="ped-top"><div><div class="ped-cli">'+esc(p.cliente||'(sin nombre)')+'</div>'+
+        '<div class="ped-meta">'+nArts+' artículo(s) · '+money(p.total_ticket)+'</div></div>'+
+        '<span class="badge">'+(TIPOS[p.tipo]||p.tipo||'—')+'</span></div>'+
+      '<div style="margin-top:10px"><button class="btn" onclick="tomar(\''+p.id+'\')"'+(hayQuien?'':' disabled')+'>'+
+        (hayQuien ? 'Tomar este pedido' : 'Elige tu número arriba') +'</button></div>'+
+    '</div>';
+  }).join('');
+}
+
+// TOMA ATÓMICA: solo se aplica si el pedido SIGUE libre. Si otro lo tomó, devuelve 0 filas.
+function tomar(id){
+  if (!sb || !QUIEN){ showToast('Primero elige tu número arriba.','lose'); return; }
+  sb.from('pedidos')
+    .update({ despachador_numero: QUIEN.numero, despachador_nombre: QUIEN.nombre || null, estatus: 'asignado', asignado_en: new Date().toISOString() })
+    .eq('id', id).eq('estatus','por_asignar').is('despachador_numero', null)
+    .select('id')
+    .then(function(r){
+      if (r.error){ showToast('Error al tomar: '+r.error.message,'lose'); return; }
+      if (!r.data || !r.data.length){ showToast('Otro despachador lo tomó primero.','lose'); cargar(); return; }
+      showToast('¡Pedido tomado! Es tuyo.','win'); cargar();
+    })
+    .catch(function(e){ showToast('Falló: '+(e&&e.message?e.message:e),'lose'); });
+}
+</script>
+</body>
+</html>
