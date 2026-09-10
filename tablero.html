@@ -62,7 +62,7 @@
 <div class="app">
   <h1>CENTRAL · Tablero de pedidos</h1>
   <div class="sub" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-    <span>Pedidos capturados · <a class="link" href="index.html">+ Capturar nuevo</a></span>
+    <span>Pedidos capturados · <a class="link" href="index.html">+ Capturar nuevo</a> · <a class="link" href="pedidos-libres.html">Pedidos libres</a> · <a class="link" href="despachadores.html">Despachadores</a></span>
     <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
   </div>
 
@@ -213,6 +213,7 @@ function render(){
         '<div><span>Entrega est.:</span> '+(p.fecha_entrega_est||'—')+'</div>'+
         '<div><span>Total ticket:</span> '+money(p.total_ticket)+'</div>'+
         '<div><span>Capturista:</span> '+esc(p.capturado_por||'—')+'</div>'+
+        '<div><span>Despachador:</span> '+(p.despachador_numero ? (esc(p.despachador_numero)+(p.despachador_nombre?(' · '+esc(p.despachador_nombre)):'')) : '—')+'</div>'+
       '</div>'+
       '<details class="arts"><summary>'+arts.length+' artículo(s)</summary>'+
         '<table><thead><tr><th>Producto</th><th class="num">Cant.</th><th>Tipo</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead>'+
