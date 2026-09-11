@@ -45,11 +45,23 @@ try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supab
 
 function aviso(txt){ var a=document.getElementById('aviso'); a.textContent=txt; a.classList.add('err'); a.style.display='block'; }
 
+// enruta segun rol: despachador -> pedidos-libres, oficina -> tablero
+function irSegunRol(numero){
+  sb.from('despachadores').select('numero').eq('numero', numero).eq('activo', true).then(function(rr){
+    location.href = (rr.data && rr.data.length) ? 'pedidos-libres.html' : 'tablero.html';
+  });
+}
+
 if (!sb){
   aviso('Falta config.js con tu Project URL y anon key.');
 } else {
-  // si ya hay sesion, entra directo
-  sb.auth.getSession().then(function(r){ if (r.data.session) location.href = 'tablero.html'; });
+  // si ya hay sesion, entra directo a la pantalla que le toca
+  sb.auth.getSession().then(function(r){
+    if (r.data.session){
+      var em=(r.data.session.user&&r.data.session.user.email)||'';
+      irSegunRol(em.split('@')[0]);
+    }
+  });
 }
 
 function entrar(){
@@ -74,7 +86,7 @@ function entrar(){
       }
       return;
     }
-    location.href = 'tablero.html';
+    irSegunRol(numero);
   }).catch(function(e){
     btn.textContent = 'Entrar'; btn.disabled = false;
     aviso('Falló la conexión: ' + (e && e.message ? e.message : e));
