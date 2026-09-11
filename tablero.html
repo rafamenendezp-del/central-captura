@@ -309,9 +309,13 @@ if (sb){
   sb.auth.getSession().then(function(r){
     if (!r.data.session){ location.href = 'login.html'; return; }
     var email = (r.data.session.user && r.data.session.user.email) || '';
-    document.getElementById('usuario').textContent = 'Usuario: ' + email.split('@')[0];
-    document.getElementById('gate').style.display = 'none';
-    cargar();
+    var num = email.split('@')[0];
+    sb.from('despachadores').select('numero').eq('numero', num).eq('activo', true).then(function(rr){
+      if (rr.data && rr.data.length){ location.href = 'pedidos-libres.html'; return; }
+      document.getElementById('usuario').textContent = 'Usuario: ' + num;
+      document.getElementById('gate').style.display = 'none';
+      cargar();
+    });
   });
 } else {
   document.getElementById('gate').style.display = 'none';
