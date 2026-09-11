@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Mis pedidos (surtido)</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:680px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864}
+  .sub{font-size:13px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  a.link{color:#1F3864;font-size:13px;text-decoration:none;font-weight:bold}
+  .card{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:14px;margin-bottom:12px}
+  .btn{padding:11px 15px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;background:#1F3864;color:#fff}
+  .btn.sm{padding:7px 10px;font-size:12px}
+  .btn.verde{background:#2E7D32}.btn.gris{background:#7a889c}.btn.rojo{background:#C0392B}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .ped-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start}
+  .ped-cli{font-size:16px;font-weight:bold}
+  .ped-meta{font-size:12px;color:#6b7d95;margin-top:2px}
+  .badge{padding:3px 9px;border-radius:12px;font-size:11px;font-weight:bold}
+  .b-asig{background:#E6F1FB;color:#0C447C}.b-sur{background:#5c4a13;color:#ffeeb8}
+  label{display:block;font-size:11px;color:#6b7d95;margin-bottom:3px;font-weight:600;text-transform:uppercase}
+  input{width:100%;padding:9px;border:1px solid #cdd9e8;border-radius:8px;font-size:14px}
+  input:focus{outline:none;border-color:#1F3864}
+  .art{border:1px solid #dce6f1;border-radius:10px;padding:12px;margin-bottom:10px;background:#fbfdff}
+  .art-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .art-num{font-size:12px;font-weight:600;color:#1F3864}
+  .r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .r4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .mini{font-size:10px;color:#8a93a3;margin:0 0 2px 2px;font-weight:600;text-transform:uppercase}
+  @media(max-width:520px){.r4{grid-template-columns:1fr 1fr}}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1c2a3a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
+  #toast.on{opacity:1}
+  .aviso{background:#FDECEA;color:#c0392b;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
+  .vacio{text-align:center;color:#6b7d95;padding:30px 10px;font-size:14px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div id="gate" style="position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100">Verificando sesión…</div>
+<div class="app">
+  <h1>CENTRAL · Mis pedidos</h1>
+  <div class="sub">
+    <span>Surtido · <a class="link" href="pedidos-libres.html">Pedidos libres</a> · <a class="link" href="tablero.html">Tablero</a></span>
+    <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
+  </div>
+
+  <div id="aviso" class="aviso"></div>
+
+  <!-- vista lista -->
+  <div id="vista-lista">
+    <div style="font-size:12px;color:#6b7d95;margin-bottom:8px" id="conteo"></div>
+    <div id="lista"></div>
+  </div>
+
+  <!-- vista editor de surtido -->
+  <div id="vista-editor" class="hidden">
+    <button class="btn gris sm" onclick="volver()">← Volver a mis pedidos</button>
+    <div class="card" style="margin-top:10px">
+      <div class="ped-cli" id="e-cliente"></div>
+      <div class="ped-meta" id="e-meta"></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+        <label style="margin:0;color:#1F3864">Recaptura de artículos</label>
+        <button class="btn sm" onclick="agregarArt()">+ Agregar</button>
+      </div>
+      <div style="font-size:11px;color:#777;margin:2px 0 8px">Ajusta metros/piezas, precios e importes según lo que realmente surtiste.</div>
+      <div id="arts"></div>
+
+      <label style="margin-top:12px">Total</label>
+      <input type="number" id="e-total" step="0.01" min="0" placeholder="$">
+
+      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+        <button class="btn" style="flex:1" onclick="guardar(false)">Guardar cambios</button>
+        <button class="btn verde" style="flex:1" onclick="guardar(true)">Confirmar surtido (listo)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+
+function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href='login.html'; }); }
+if (sb){
+  sb.auth.getSession().then(function(r){
+    if (!r.data.session){ location.href='login.html'; return; }
+    var email=(r.data.session.user&&r.data.session.user.email)||'';
+    MINUM = email.split('@')[0];
+    document.getElementById('usuario').textContent='Usuario: '+MINUM;
+    document.getElementById('gate').style.display='none';
+    cargar();
+  });
+} else {
+  document.getElementById('gate').style.display='none';
+  var a=document.getElementById('aviso'); a.textContent='Falta config.js con tu Project URL y anon key.'; a.style.display='block';
+}
+
+var MINUM='', MIS=[], ACTUAL=null;
+function showToast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on');},2800); }
+function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function money(n){ return (n==null||n==='')?'—':('$'+Number(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})); }
+var TIPOS = { no_hay:'No hay', tienda:'Recoge en tienda', domicilio:'Domicilio' };
+
+function cargar(){
+  if (!sb) return;
+  sb.from('pedidos').select('*, pedido_articulos(*)')
+    .eq('despachador_numero', MINUM).in('estatus', ['asignado','surtiendo'])
+    .order('asignado_en', { ascending:true })
+    .then(function(r){
+      if (r.error){ showToast('Error: '+r.error.message); return; }
+      MIS = r.data || [];
+      render();
+    });
+}
+
+function render(){
+  document.getElementById('conteo').textContent = MIS.length + ' pedido(s) por surtir';
+  var c = document.getElementById('lista');
+  if (!MIS.length){ c.innerHTML = '<div class="vacio">No tienes pedidos por surtir. Toma uno en "Pedidos libres".</div>'; return; }
+  c.innerHTML = MIS.map(function(p){
+    var nArts=(p.pedido_articulos||[]).length;
+    var badge = (p.estatus==='surtiendo') ? '<span class="badge b-sur">Surtiendo</span>' : '<span class="badge b-asig">Asignado</span>';
+    return '<div class="card"><div class="ped-top"><div>'+
+      '<div class="ped-cli">'+esc(p.cliente||'(sin nombre)')+'</div>'+
+      '<div class="ped-meta">'+(TIPOS[p.tipo]||p.tipo||'')+' · '+nArts+' artículo(s) · '+money(p.total_ticket)+'</div></div>'+
+      badge+'</div>'+
+      '<div style="margin-top:10px"><button class="btn verde" onclick="surtir(\''+p.id+'\')">Surtir este pedido</button></div></div>';
+  }).join('');
+}
+
+/* ---- editor de recaptura ---- */
+function surtir(id){
+  ACTUAL = MIS.filter(function(p){ return p.id===id; })[0];
+  if (!ACTUAL) return;
+  // marcar "surtiendo" si aun estaba "asignado"
+  if (ACTUAL.estatus === 'asignado'){
+    sb.from('pedidos').update({ estatus:'surtiendo' }).eq('id', id).then(function(){});
+    ACTUAL.estatus = 'surtiendo';
+  }
+  document.getElementById('e-cliente').textContent = ACTUAL.cliente || '(sin nombre)';
+  document.getElementById('e-meta').textContent = (TIPOS[ACTUAL.tipo]||ACTUAL.tipo||'');
+  document.getElementById('e-total').value = (ACTUAL.total_ticket!=null?ACTUAL.total_ticket:'');
+  var cont = document.getElementById('arts'); cont.innerHTML='';
+  var arts = (ACTUAL.pedido_articulos||[]).slice().sort(function(a,b){return (a.orden||0)-(b.orden||0);});
+  if (!arts.length) agregarArt(); else arts.forEach(function(a){ agregarArt(a); });
+  document.getElementById('vista-lista').classList.add('hidden');
+  document.getElementById('vista-editor').classList.remove('hidden');
+  window.scrollTo(0,0);
+}
+
+function volver(){
+  document.getElementById('vista-editor').classList.add('hidden');
+  document.getElementById('vista-lista').classList.remove('hidden');
+  ACTUAL=null; cargar();
+}
+
+function renum(){ document.querySelectorAll('#arts .art').forEach(function(l,i){ l.querySelector('.art-num').textContent='Artículo '+(i+1); }); }
+function agregarArt(d){
+  d=d||{};
+  function q(v){ return v!=null?String(v).replace(/"/g,'&quot;'):''; }
+  var div=document.createElement('div'); div.className='art';
+  div.innerHTML=
+    '<div class="art-head"><span class="art-num"></span><button class="btn sm rojo" onclick="quitarArt(this)">Quitar</button></div>'+
+    '<div class="r2"><div><div class="mini">Artículo</div><input class="a-prod" value="'+q(d.producto)+'" placeholder="Producto"></div>'+
+      '<div><div class="mini">Color/modelo</div><input class="a-color" value="'+q(d.color_modelo)+'" placeholder="Color o modelo"></div></div>'+
+    '<div class="r4" style="margin-top:8px">'+
+      '<div><div class="mini">Cantidad</div><input class="a-cant" type="number" step="0.01" min="0" value="'+(d.cantidad!=null?d.cantidad:'')+'"></div>'+
+      '<div><div class="mini">Tipo</div><input class="a-unid" value="'+q(d.unidad)+'" placeholder="M/PZ"></div>'+
+      '<div><div class="mini">Precio</div><input class="a-precio" type="number" step="0.01" min="0" value="'+(d.precio!=null&&d.precio!==''?d.precio:'')+'"></div>'+
+      '<div><div class="mini">Importe</div><input class="a-imp" type="number" step="0.01" min="0" value="'+(d.importe!=null&&d.importe!==''?d.importe:'')+'"></div></div>';
+  document.getElementById('arts').appendChild(div); renum();
+}
+function quitarArt(btn){ btn.closest('.art').remove(); renum(); }
+function leerArts(){
+  var out=[];
+  document.querySelectorAll('#arts .art').forEach(function(l,i){
+    var prod=l.querySelector('.a-prod').value.trim();
+    var cant=l.querySelector('.a-cant').value;
+    if (!prod && cant==='') return;
+    var pr=l.querySelector('.a-precio').value, im=l.querySelector('.a-imp').value;
+    out.push({ orden:i+1, producto:prod, color_modelo:l.querySelector('.a-color').value.trim()||null,
+      cantidad: cant===''?null:parseFloat(cant), unidad:l.querySelector('.a-unid').value.trim()||null,
+      precio: pr===''?null:parseFloat(pr), importe: im===''?null:parseFloat(im) });
+  });
+  return out;
+}
+
+function guardar(confirmar){
+  if (!sb || !ACTUAL) return;
+  var arts = leerArts();
+  if (!arts.length){ showToast('Debe quedar al menos un artículo'); return; }
+  for (var i=0;i<arts.length;i++){ if (!arts[i].producto){ showToast('Falta el producto en el artículo '+(i+1)); return; } }
+
+  var pid = ACTUAL.id;
+  var totalRaw = document.getElementById('e-total').value;
+  // reemplazo simple: borra los articulos y reinserta los actuales
+  sb.from('pedido_articulos').delete().eq('pedido_id', pid)
+    .then(function(r0){
+      if (r0.error) throw r0.error;
+      return sb.from('pedido_articulos').insert(arts.map(function(a){ a.pedido_id=pid; return a; }));
+    })
+    .then(function(r1){
+      if (r1.error) throw r1.error;
+      var upd = { total_ticket: (totalRaw===''?null:parseFloat(totalRaw)) };
+      if (confirmar) upd.estatus = 'listo';
+      return sb.from('pedidos').update(upd).eq('id', pid);
+    })
+    .then(function(r2){
+      if (r2.error) throw r2.error;
+      showToast(confirmar ? 'Surtido confirmado. Pedido listo.' : 'Cambios guardados.');
+      if (confirmar) volver();
+    })
+    .catch(function(e){ showToast('No se pudo guardar: '+(e&&e.message?e.message:e)); });
+}
+</script>
+</body>
+</html>
