@@ -91,7 +91,7 @@
     <div class="form-row-3" style="margin-top:4px">
       <div>
         <label>Tipo de pedido *</label>
-        <select id="ft-tipo">
+        <select id="ft-tipo" onchange="toggleDireccion()">
           <option value="">Selecciona…</option>
           <option value="no_hay">No hay (se consigue)</option>
           <option value="tienda">Recoge en tienda</option>
@@ -122,6 +122,13 @@
 
     <label style="margin-top:12px">Fecha estimada de entrega</label>
     <input type="date" id="ft-fecha-entrega-est" />
+
+    <div id="ft-dir-bloque" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #cdd9e8;border-radius:10px;background:#f8fbff">
+      <label style="margin-top:0;color:#1F3864">Dirección de entrega *</label>
+      <input type="text" id="ft-direccion" placeholder="Calle, número, colonia" />
+      <label style="margin-top:10px">Referencias</label>
+      <input type="text" id="ft-referencias" placeholder="Entre calles, cómo llegar, señas" />
+    </div>
 
     <label style="margin-top:16px;color:#1F3864">Ticket del punto de venta</label>
     <div class="foto-drop" onclick="document.getElementById('ft-foto').click()">
@@ -210,6 +217,11 @@ if (sb){
 }
 
 var ticketBase64 = '';
+
+function toggleDireccion(){
+  var esDom = document.getElementById('ft-tipo').value === 'domicilio';
+  document.getElementById('ft-dir-bloque').classList.toggle('hidden', !esDom);
+}
 var OCR_LEYENDO = false, OCR_TIMER = null;
 
 /* ---------- toast / mensajes ---------- */
@@ -463,11 +475,14 @@ function guardarPedidoTel(){
   var fechaEst = document.getElementById('ft-fecha-entrega-est').value;
   var capturista = document.getElementById('ft-capturista').value.trim();
   var totalRaw = document.getElementById('ft-total').value;
+  var direccion = document.getElementById('ft-direccion').value.trim();
+  var referencias = document.getElementById('ft-referencias').value.trim();
 
   if (!sb){ showToast('Falta configurar Supabase (lineas 🔴).'); return; }
   if (!cliente){ showToast('Ingresa el nombre del cliente'); return; }
   if (!telefono && !whatsapp){ showToast('Ingresa al menos un telefono o WhatsApp'); return; }
   if (!tipo){ showToast('Selecciona el tipo de pedido'); return; }
+  if (tipo === 'domicilio' && !direccion){ showToast('Ingresa la dirección de entrega'); return; }
 
   var articulos = leerLineasArt();
   if (!articulos.length){ showToast('Agrega al menos un articulo'); return; }
@@ -483,6 +498,8 @@ function guardarPedidoTel(){
     cliente: cliente, telefono: telefono || null, whatsapp: whatsapp || null,
     tipo: tipo, tipo_comprobante: comprobante || null, forma_pago: pago || null,
     fecha_entrega_est: fechaEst || null,
+    direccion: (tipo === 'domicilio' ? (direccion || null) : null),
+    referencias: (tipo === 'domicilio' ? (referencias || null) : null),
     total_ticket: (totalRaw === '' ? null : parseFloat(totalRaw)),
     capturado_por: capturista || null
   };
@@ -518,8 +535,9 @@ function guardarPedidoTel(){
 }
 
 function limpiarFormTel(){
-  ['ft-cliente','ft-telefono','ft-whatsapp','ft-fecha-entrega-est','ft-total'].forEach(function(id){ document.getElementById(id).value=''; });
+  ['ft-cliente','ft-telefono','ft-whatsapp','ft-fecha-entrega-est','ft-total','ft-direccion','ft-referencias'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('ft-tipo').value='';
+  document.getElementById('ft-dir-bloque').classList.add('hidden');
   document.getElementById('ft-comprobante').value='';
   document.getElementById('ft-pago').value='';
   document.getElementById('ft-foto').value='';
