@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Reparto</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:680px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864}
+  .sub{font-size:13px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  a.link{color:#1F3864;font-size:13px;text-decoration:none;font-weight:bold}
+  h2{font-size:15px;color:#1F3864;margin:18px 0 8px}
+  .card{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:14px;margin-bottom:12px}
+  label{display:block;font-size:11px;color:#6b7d95;margin-bottom:3px;font-weight:600;text-transform:uppercase}
+  select,input{width:100%;padding:10px;border:1px solid #cdd9e8;border-radius:8px;font-size:14px;background:#fff}
+  select:focus,input:focus{outline:none;border-color:#1F3864}
+  .fila{display:flex;gap:10px;flex-wrap:wrap}
+  .fila>div{flex:1;min-width:140px}
+  .btn{padding:11px 15px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;background:#1F3864;color:#fff;width:100%}
+  .btn.verde{background:#2E7D32}.btn.azul{background:#1F6FB2}.btn.gris{background:#7a889c;width:auto;padding:8px 12px;font-size:13px}
+  .ped-cli{font-size:16px;font-weight:bold}
+  .ped-dir{font-size:13px;color:#33465c;margin-top:4px}
+  .ped-meta{font-size:12px;color:#6b7d95;margin-top:4px}
+  .badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:bold}
+  .b-cam{background:#E6F1FB;color:#0C447C}.b-ruta{background:#e7f0ff;color:#1F6FB2}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1c2a3a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
+  #toast.on{opacity:1}
+  .vacio{color:#6b7d95;font-size:13px;padding:14px;text-align:center}
+</style>
+</head>
+<body>
+<div id="gate" style="position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100">Verificando sesión…</div>
+<div class="app">
+  <h1>CENTRAL · Reparto</h1>
+  <div class="sub">
+    <span>Choferes · <a class="link" href="tablero.html">Tablero</a></span>
+    <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
+  </div>
+
+  <div class="card">
+    <div class="fila">
+      <div><label>Camioneta</label>
+        <select id="camioneta" onchange="guardarCam()">
+          <option value="1">Camioneta 1</option>
+          <option value="2">Camioneta 2</option>
+        </select></div>
+      <div><label>Chofer (opcional)</label><input id="chofer" placeholder="Nombre del chofer" onchange="guardarCam()"></div>
+    </div>
+  </div>
+
+  <div style="text-align:right;margin-bottom:6px"><button class="btn gris" onclick="cargar()">↻ Actualizar</button></div>
+
+  <h2>Listos para enviar</h2>
+  <div id="listos"></div>
+
+  <h2>En mi camioneta / en ruta</h2>
+  <div id="enruta"></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+
+function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href='login.html'; }); }
+if (sb){
+  sb.auth.getSession().then(function(r){
+    if (!r.data.session){ location.href='login.html'; return; }
+    var email=(r.data.session.user&&r.data.session.user.email)||'';
+    var num=email.split('@')[0];
+    sb.from('despachadores').select('numero').eq('numero', num).eq('activo', true).then(function(rr){
+      if (rr.data && rr.data.length){ location.href='pedidos-libres.html'; return; } // los despachadores no reparten
+      document.getElementById('usuario').textContent='Usuario: '+num;
+      document.getElementById('gate').style.display='none';
+      restaurarCam();
+      cargar();
+    });
+  });
+} else {
+  document.getElementById('gate').style.display='none';
+}
+
+var LISTOS=[], ENRUTA=[];
+function showToast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on');},2800); }
+function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function camSel(){ return document.getElementById('camioneta').value; }
+function choferSel(){ return document.getElementById('chofer').value.trim(); }
+function guardarCam(){ localStorage.setItem('central_cam', camSel()); localStorage.setItem('central_chofer', choferSel()); cargar(); }
+function restaurarCam(){
+  var c=localStorage.getItem('central_cam'); if(c) document.getElementById('camioneta').value=c;
+  var ch=localStorage.getItem('central_chofer'); if(ch) document.getElementById('chofer').value=ch;
+}
+
+function cargar(){
+  if (!sb) return;
+  // listos para enviar (domicilio, listo)
+  sb.from('pedidos').select('id,cliente,telefono,whatsapp,direccion,referencias,total_ticket, pedido_articulos(id)')
+    .eq('tipo','domicilio').eq('estatus','listo').order('creado_en',{ascending:true})
+    .then(function(r){ if(!r.error){ LISTOS=r.data||[]; renderListos(); } });
+  // en mi camioneta / en ruta
+  sb.from('pedidos').select('id,cliente,telefono,whatsapp,direccion,referencias,estatus,camioneta,total_ticket, pedido_articulos(id)')
+    .in('estatus',['en_camioneta','en_ruta']).eq('camioneta', camSel()).order('asignado_en',{ascending:true})
+    .then(function(r){ if(!r.error){ ENRUTA=r.data||[]; renderEnruta(); } });
+}
+
+function tarjeta(p, botones){
+  var nArts=(p.pedido_articulos||[]).length;
+  var contacto = p.telefono || p.whatsapp || '';
+  return '<div class="card">'+
+    '<div class="ped-cli">'+esc(p.cliente||'(sin nombre)')+'</div>'+
+    '<div class="ped-dir">📍 '+esc(p.direccion||'(sin dirección)')+(p.referencias?(' — '+esc(p.referencias)):'')+'</div>'+
+    '<div class="ped-meta">'+(contacto?('☎ '+esc(contacto)+' · '):'')+nArts+' artículo(s)</div>'+
+    '<div style="margin-top:10px">'+botones+'</div></div>';
+}
+
+function renderListos(){
+  var c=document.getElementById('listos');
+  if(!LISTOS.length){ c.innerHTML='<div class="vacio">No hay pedidos listos para enviar.</div>'; return; }
+  c.innerHTML = LISTOS.map(function(p){
+    return tarjeta(p, '<button class="btn verde" onclick="cargarEnCamioneta(\''+p.id+'\')">Cargar en Camioneta '+camSel()+'</button>');
+  }).join('');
+}
+
+function renderEnruta(){
+  var c=document.getElementById('enruta');
+  if(!ENRUTA.length){ c.innerHTML='<div class="vacio">Nada cargado en la Camioneta '+camSel()+'.</div>'; return; }
+  c.innerHTML = ENRUTA.map(function(p){
+    var badge = p.estatus==='en_ruta' ? '<span class="badge b-ruta">En ruta</span>' : '<span class="badge b-cam">Cargado</span>';
+    var btns;
+    if (p.estatus==='en_camioneta') btns='<button class="btn azul" onclick="salioRuta(\''+p.id+'\')">Salió a ruta</button>';
+    else btns='<button class="btn verde" onclick="entregar(\''+p.id+'\')">Marcar entregado</button>';
+    return '<div class="card">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="ped-cli">'+esc(p.cliente||'(sin nombre)')+'</div>'+badge+'</div>'+
+      '<div class="ped-dir">📍 '+esc(p.direccion||'(sin dirección)')+(p.referencias?(' — '+esc(p.referencias)):'')+'</div>'+
+      '<div class="ped-meta">'+((p.telefono||p.whatsapp)?('☎ '+esc(p.telefono||p.whatsapp)):'')+'</div>'+
+      '<div style="margin-top:10px">'+btns+'</div></div>';
+  }).join('');
+}
+
+function cargarEnCamioneta(id){
+  if(!sb) return;
+  sb.from('pedidos')
+    .update({ estatus:'en_camioneta', camioneta:camSel(), chofer:choferSel()||null })
+    .eq('id', id).eq('estatus','listo')
+    .select('id')
+    .then(function(r){
+      if(r.error){ showToast('Error: '+r.error.message); return; }
+      if(!r.data||!r.data.length){ showToast('Otro chofer ya lo cargó.'); cargar(); return; }
+      showToast('Cargado en Camioneta '+camSel()); cargar();
+    });
+}
+
+function salioRuta(id){
+  if(!sb) return;
+  sb.from('pedidos').update({ estatus:'en_ruta' }).eq('id', id).then(function(r){
+    if(r.error){ showToast('Error: '+r.error.message); return; }
+    showToast('Marcado en ruta. (El aviso al cliente por WhatsApp se conecta después.)'); cargar();
+  });
+}
+
+function entregar(id){
+  if(!sb) return;
+  var recibio = prompt('¿Quién recibió el pedido? (nombre)');
+  if (recibio === null) return; // cancelo
+  sb.from('pedidos').update({ estatus:'entregado', recibio: recibio.trim()||null, entregado_en: new Date().toISOString() })
+    .eq('id', id).then(function(r){
+      if(r.error){ showToast('Error: '+r.error.message); return; }
+      showToast('¡Entregado! (La foto de identificación se agrega en el siguiente paso.)'); cargar();
+    });
+}
+</script>
+</body>
+</html>
