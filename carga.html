@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Carga de camionetas</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:680px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864}
+  .sub{font-size:13px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  a.link{color:#1F3864;font-size:13px;text-decoration:none;font-weight:bold}
+  h2{font-size:15px;color:#1F3864;margin:18px 0 8px}
+  .card{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:14px;margin-bottom:12px}
+  .ped-cli{font-size:16px;font-weight:bold}
+  .ped-dir{font-size:13px;color:#33465c;margin-top:4px}
+  .ped-meta{font-size:12px;color:#6b7d95;margin-top:4px}
+  .btn{padding:11px 15px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;color:#fff}
+  .btn.c1{background:#1F6FB2}.btn.c2{background:#6C4AB6}.btn.gris{background:#7a889c;padding:8px 12px;font-size:13px}
+  .resumen{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .chip{background:#fff;border:1px solid #dce6f1;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:bold}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1c2a3a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
+  #toast.on{opacity:1}
+  .vacio{color:#6b7d95;font-size:13px;padding:14px;text-align:center}
+</style>
+</head>
+<body>
+<div id="gate" style="position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100">Verificando sesión…</div>
+<div class="app">
+  <h1>CENTRAL · Carga de camionetas</h1>
+  <div class="sub">
+    <span>Encargado de carga · <a class="link" href="chofer.html">Chofer</a> · <a class="link" href="tablero.html">Tablero</a></span>
+    <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
+  </div>
+
+  <div class="resumen"><span class="chip" id="chip1">Camioneta 1: —</span><span class="chip" id="chip2">Camioneta 2: —</span>
+    <button class="btn gris" onclick="cargar()" style="margin-left:auto">↻ Actualizar</button></div>
+
+  <h2>Listos para enviar</h2>
+  <div id="listos"></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+
+function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href='login.html'; }); }
+if (sb){
+  sb.auth.getSession().then(function(r){
+    if (!r.data.session){ location.href='login.html'; return; }
+    var email=(r.data.session.user&&r.data.session.user.email)||''; var num=email.split('@')[0];
+    sb.from('despachadores').select('numero').eq('numero', num).eq('activo', true).then(function(rr){
+      if (rr.data && rr.data.length){ location.href='pedidos-libres.html'; return; }
+      document.getElementById('usuario').textContent='Usuario: '+num;
+      document.getElementById('gate').style.display='none';
+      cargar();
+    });
+  });
+} else { document.getElementById('gate').style.display='none'; }
+
+var LISTOS=[];
+function showToast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on');},2600); }
+function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function cargar(){
+  if (!sb) return;
+  sb.from('pedidos').select('id,cliente,telefono,whatsapp,direccion,referencias, pedido_articulos(id)')
+    .eq('tipo','domicilio').eq('estatus','listo').order('creado_en',{ascending:true})
+    .then(function(r){ if(!r.error){ LISTOS=r.data||[]; render(); } });
+  // resumen de cargas por camioneta (en_camioneta + en_ruta)
+  sb.from('pedidos').select('camioneta,estatus').in('estatus',['en_camioneta','en_ruta'])
+    .then(function(r){
+      if(r.error) return;
+      var c1=0,c2=0; (r.data||[]).forEach(function(p){ if(p.camioneta==='1')c1++; else if(p.camioneta==='2')c2++; });
+      document.getElementById('chip1').textContent='Camioneta 1: '+c1+' pedido(s)';
+      document.getElementById('chip2').textContent='Camioneta 2: '+c2+' pedido(s)';
+    });
+}
+
+function render(){
+  var c=document.getElementById('listos');
+  if(!LISTOS.length){ c.innerHTML='<div class="vacio">No hay pedidos listos para enviar.</div>'; return; }
+  c.innerHTML = LISTOS.map(function(p){
+    var nArts=(p.pedido_articulos||[]).length;
+    return '<div class="card"><div class="ped-cli">'+esc(p.cliente||'(sin nombre)')+'</div>'+
+      '<div class="ped-dir">📍 '+esc(p.direccion||'(sin dirección)')+(p.referencias?(' — '+esc(p.referencias)):'')+'</div>'+
+      '<div class="ped-meta">'+((p.telefono||p.whatsapp)?('☎ '+esc(p.telefono||p.whatsapp)+' · '):'')+nArts+' artículo(s)</div>'+
+      '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn c1" style="flex:1" onclick="cargarEn(\''+p.id+'\',\'1\')">Cargar en Camioneta 1</button>'+
+        '<button class="btn c2" style="flex:1" onclick="cargarEn(\''+p.id+'\',\'2\')">Camioneta 2</button></div></div>';
+  }).join('');
+}
+
+function cargarEn(id, cam){
+  if(!sb) return;
+  sb.from('pedidos').update({ estatus:'en_camioneta', camioneta:cam })
+    .eq('id', id).eq('estatus','listo').select('id')
+    .then(function(r){
+      if(r.error){ showToast('Error: '+r.error.message); return; }
+      if(!r.data||!r.data.length){ showToast('Ese pedido ya no estaba listo.'); cargar(); return; }
+      showToast('Cargado en Camioneta '+cam); cargar();
+    });
+}
+</script>
+</body>
+</html>
