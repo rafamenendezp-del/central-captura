@@ -62,7 +62,7 @@
 <div class="app">
   <h1>CENTRAL · Tablero de pedidos</h1>
   <div class="sub" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-    <span>Pedidos capturados · <a class="link" href="index.html">+ Capturar nuevo</a> · <a class="link" href="pedidos-libres.html">Pedidos libres</a> · <a class="link" href="reparto.html">Reparto</a> · <a class="link" href="despachadores.html">Despachadores</a></span>
+    <span>Pedidos capturados · <a class="link" href="index.html">+ Capturar nuevo</a> · <a class="link" href="pedidos-libres.html">Pedidos libres</a> · <a class="link" href="carga.html">Carga</a> · <a class="link" href="chofer.html">Chofer</a> · <a class="link" href="despachadores.html">Despachadores</a></span>
     <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
   </div>
 
@@ -214,6 +214,7 @@ function render(){
         '<div><span>Total ticket:</span> '+money(p.total_ticket)+'</div>'+
         '<div><span>Capturista:</span> '+esc(p.capturado_por||'—')+'</div>'+
         '<div><span>Despachador:</span> '+(p.despachador_numero ? (esc(p.despachador_numero)+(p.despachador_nombre?(' · '+esc(p.despachador_nombre)):'')) : '—')+'</div>'+
+        (p.foto_id_url ? ('<div><span>Entrega:</span> '+esc(p.recibio||'recibido')+' · <a href="#" onclick="verID(\''+esc(p.foto_id_url)+'\');return false;" style="color:#1F6FB2;font-weight:bold">Ver identificación</a></div>') : '')+
       '</div>'+
       '<details class="arts"><summary>'+arts.length+' artículo(s)</summary>'+
         '<table><thead><tr><th>Producto</th><th class="num">Cant.</th><th>Tipo</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead>'+
@@ -289,6 +290,14 @@ function siguientes(tipo, estatus){
 function avanzar(id, to){
   if (to === 'cancelado' && !confirm('¿Cancelar este pedido? Esta acción lo saca del flujo.')) return;
   cambiarEstatus(id, to);
+}
+
+function verID(ruta){
+  if(!sb) return;
+  sb.storage.from('identificaciones').createSignedUrl(ruta, 60).then(function(r){
+    if(r.error || !r.data){ showToast('No se pudo abrir la foto: '+((r.error&&r.error.message)||'')); return; }
+    window.open(r.data.signedUrl, '_blank');
+  });
 }
 
 function cambiarEstatus(id, nuevo){
