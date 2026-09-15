@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Chofer</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:680px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864}
+  .sub{font-size:13px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  a.link{color:#1F3864;font-size:13px;text-decoration:none;font-weight:bold}
+  .card{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:14px;margin-bottom:12px}
+  label{display:block;font-size:11px;color:#6b7d95;margin-bottom:3px;font-weight:600;text-transform:uppercase}
+  select,input{width:100%;padding:10px;border:1px solid #cdd9e8;border-radius:8px;font-size:14px;background:#fff}
+  select:focus,input:focus{outline:none;border-color:#1F3864}
+  .ped-cli{font-size:16px;font-weight:bold}
+  .ped-dir{font-size:13px;color:#33465c;margin-top:4px}
+  .ped-meta{font-size:12px;color:#6b7d95;margin-top:4px}
+  .badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:bold}
+  .b-cam{background:#E6F1FB;color:#0C447C}.b-ruta{background:#e7f0ff;color:#1F6FB2}
+  .btn{padding:11px 15px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;color:#fff;background:#1F3864}
+  .btn.verde{background:#2E7D32}.btn.azul{background:#1F6FB2}.btn.gris{background:#7a889c}.btn.rojo{background:#C0392B}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1c2a3a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
+  #toast.on{opacity:1}
+  .vacio{color:#6b7d95;font-size:13px;padding:14px;text-align:center}
+  /* modal entrega */
+  .modal{position:fixed;inset:0;background:rgba(11,18,32,.6);display:none;align-items:center;justify-content:center;padding:16px;z-index:70}
+  .modal.on{display:flex}
+  .modal-box{background:#fff;border-radius:14px;padding:18px;width:100%;max-width:420px;max-height:92vh;overflow:auto}
+  .modal-box h3{color:#1F3864;font-size:17px;margin-bottom:10px}
+  #foto-prev{margin-top:10px;text-align:center}
+  #foto-prev img{max-width:100%;max-height:220px;border-radius:10px;border:1px solid #dce6f1}
+  /* overlay camara */
+  .overlay{position:fixed;inset:0;background:#0B1220;z-index:80;display:none;flex-direction:column;padding:14px}
+  .overlay.on{display:flex}
+  .overlay video{flex:1;width:100%;border-radius:12px;background:#000;object-fit:contain;min-height:0}
+  .overlay-bar{display:flex;gap:10px;margin-top:12px}.overlay-bar .btn{flex:1;padding:15px}
+</style>
+</head>
+<body>
+<div id="gate" style="position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100">Verificando sesión…</div>
+<div class="app">
+  <h1>CENTRAL · Chofer</h1>
+  <div class="sub">
+    <span>Mi camioneta · <a class="link" href="carga.html">Carga</a> · <a class="link" href="tablero.html">Tablero</a></span>
+    <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="cerrarSesion();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
+  </div>
+
+  <div class="card">
+    <label>¿Qué camioneta manejas?</label>
+    <select id="camioneta" onchange="guardarCam()">
+      <option value="1">Camioneta 1</option>
+      <option value="2">Camioneta 2</option>
+    </select>
+  </div>
+
+  <div style="text-align:right;margin-bottom:6px"><button class="btn gris" onclick="cargar()">↻ Actualizar</button></div>
+  <div id="lista"></div>
+</div>
+
+<!-- modal de entrega -->
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <h3>Confirmar entrega</h3>
+    <div id="m-cliente" style="font-weight:bold"></div>
+    <div id="m-dir" style="font-size:13px;color:#33465c;margin-bottom:12px"></div>
+
+    <label>¿Quién recibió?</label>
+    <input id="m-recibio" placeholder="Nombre de quien recibe">
+
+    <label style="margin-top:12px">Foto de la identificación *</label>
+    <div style="display:flex;gap:8px">
+      <button class="btn azul" style="flex:1" onclick="abrirCamara()">📷 Tomar foto</button>
+      <button class="btn gris" style="flex:1" onclick="document.getElementById('m-file').click()">Subir</button>
+    </div>
+    <input type="file" id="m-file" accept="image/*" capture="environment" style="display:none" onchange="deArchivo(this)">
+    <div id="foto-prev"></div>
+
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn gris" style="flex:1" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn verde" style="flex:1" id="btn-confirmar" onclick="confirmarEntrega()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- overlay camara -->
+<div class="overlay" id="ov-cam">
+  <video id="cam-video" autoplay playsinline muted></video>
+  <div class="overlay-bar"><button class="btn rojo" onclick="cerrarCamara()">Cancelar</button>
+    <button class="btn verde" onclick="disparar()">Tomar</button></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+
+function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href='login.html'; }); }
+if (sb){
+  sb.auth.getSession().then(function(r){
+    if (!r.data.session){ location.href='login.html'; return; }
+    var email=(r.data.session.user&&r.data.session.user.email)||''; var num=email.split('@')[0];
+    sb.from('despachadores').select('numero').eq('numero', num).eq('activo', true).then(function(rr){
+      if (rr.data && rr.data.length){ location.href='pedidos-libres.html'; return; }
+      document.getElementById('usuario').textContent='Usuario: '+num;
+      document.getElementById('gate').style.display='none';
+      restaurarCam(); cargar();
+    });
+  });
+} else { document.getElementById('gate').style.display='none'; }
+
+var CARGA=[], ACTUAL=null, fotoBlob=null, camStream=null;
+function showToast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on');},2800); }
+function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function camSel(){ return document.getElementById('camioneta').value; }
+function guardarCam(){ localStorage.setItem('central_chofer_cam', camSel()); cargar(); }
+function restaurarCam(){ var c=localStorage.getItem('central_chofer_cam'); if(c) document.getElementById('camioneta').value=c; }
+
+function cargar(){
+  if(!sb) return;
+  sb.from('pedidos').select('id,cliente,telefono,whatsapp,direccion,referencias,estatus')
+    .in('estatus',['en_camioneta','en_ruta']).eq('camioneta', camSel()).order('asignado_en',{ascending:true})
+    .then(function(r){ if(!r.error){ CARGA=r.data||[]; render(); } });
+}
+
+function render(){
+  var c=document.getElementById('lista');
+  if(!CARGA.length){ c.innerHTML='<div class="vacio">Nada cargado en la Camioneta '+camSel()+'.</div>'; return; }
+  c.innerHTML = CARGA.map(function(p){
+    var badge = p.estatus==='en_ruta' ? '<span class="badge b-ruta">En ruta</span>' : '<span class="badge b-cam">Cargado</span>';
+    var btn = p.estatus==='en_camioneta'
+      ? '<button class="btn azul" onclick="salioRuta(\''+p.id+'\')">Salió a ruta</button>'
+      : '<button class="btn verde" onclick="abrirEntrega(\''+p.id+'\')">Marcar entregado</button>';
+    return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+      '<div class="ped-cli">'+esc(p.cliente||'(sin nombre)')+'</div>'+badge+'</div>'+
+      '<div class="ped-dir">📍 '+esc(p.direccion||'(sin dirección)')+(p.referencias?(' — '+esc(p.referencias)):'')+'</div>'+
+      '<div class="ped-meta">'+((p.telefono||p.whatsapp)?('☎ '+esc(p.telefono||p.whatsapp)):'')+'</div>'+
+      '<div style="margin-top:10px">'+btn+'</div></div>';
+  }).join('');
+}
+
+function salioRuta(id){
+  sb.from('pedidos').update({ estatus:'en_ruta' }).eq('id', id).then(function(r){
+    if(r.error){ showToast('Error: '+r.error.message); return; }
+    showToast('En ruta. (El aviso al cliente se conecta después.)'); cargar();
+  });
+}
+
+/* ---- entrega con foto ---- */
+function abrirEntrega(id){
+  ACTUAL = CARGA.filter(function(p){return p.id===id;})[0]; if(!ACTUAL) return;
+  fotoBlob=null;
+  document.getElementById('m-cliente').textContent = ACTUAL.cliente||'(sin nombre)';
+  document.getElementById('m-dir').textContent = '📍 '+(ACTUAL.direccion||'');
+  document.getElementById('m-recibio').value='';
+  document.getElementById('foto-prev').innerHTML='';
+  document.getElementById('modal').classList.add('on');
+}
+function cerrarModal(){ document.getElementById('modal').classList.remove('on'); ACTUAL=null; fotoBlob=null; }
+
+function ponerFoto(blob){
+  fotoBlob=blob;
+  var url=URL.createObjectURL(blob);
+  document.getElementById('foto-prev').innerHTML='<img src="'+url+'">';
+}
+function deArchivo(inp){
+  var f=inp.files[0]; if(!f) return;
+  var img=new Image();
+  img.onload=function(){
+    var c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+    c.getContext('2d').drawImage(img,0,0);
+    var maxL=1400; if(Math.max(c.width,c.height)>maxL){ var s=maxL/Math.max(c.width,c.height); var c2=document.createElement('canvas'); c2.width=Math.round(c.width*s); c2.height=Math.round(c.height*s); c2.getContext('2d').drawImage(c,0,0,c2.width,c2.height); c=c2; }
+    c.toBlob(function(b){ ponerFoto(b); }, 'image/jpeg', 0.85);
+  };
+  img.src=URL.createObjectURL(f); inp.value='';
+}
+function abrirCamara(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ showToast('Sin cámara; usa Subir.'); return; }
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false})
+    .then(function(s){ camStream=s; document.getElementById('cam-video').srcObject=s; document.getElementById('ov-cam').classList.add('on'); })
+    .catch(function(){ showToast('No se pudo abrir la cámara.'); });
+}
+function disparar(){
+  var v=document.getElementById('cam-video'); if(!camStream||!v.videoWidth) return;
+  var c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  var maxL=1400; if(Math.max(c.width,c.height)>maxL){ var s=maxL/Math.max(c.width,c.height); var c2=document.createElement('canvas'); c2.width=Math.round(c.width*s); c2.height=Math.round(c.height*s); c2.getContext('2d').drawImage(c,0,0,c2.width,c2.height); c=c2; }
+  c.toBlob(function(b){ ponerFoto(b); cerrarCamara(); }, 'image/jpeg', 0.85);
+}
+function cerrarCamara(){ if(camStream){ camStream.getTracks().forEach(function(t){t.stop();}); camStream=null; } document.getElementById('ov-cam').classList.remove('on'); }
+
+function confirmarEntrega(){
+  if(!sb||!ACTUAL) return;
+  if(!fotoBlob){ showToast('Toma o sube la foto de la identificación.'); return; }
+  var recibio=document.getElementById('m-recibio').value.trim();
+  var btn=document.getElementById('btn-confirmar'); btn.textContent='Guardando…'; btn.disabled=true;
+  var ruta = 'pedido-'+ACTUAL.id+'-'+Date.now()+'.jpg';
+  sb.storage.from('identificaciones').upload(ruta, fotoBlob, { contentType:'image/jpeg' })
+    .then(function(up){
+      if(up.error) throw up.error;
+      return sb.from('pedidos').update({ estatus:'entregado', recibio:recibio||null, foto_id_url:ruta, entregado_en:new Date().toISOString() }).eq('id', ACTUAL.id);
+    })
+    .then(function(r){
+      if(r.error) throw r.error;
+      btn.textContent='Confirmar'; btn.disabled=false;
+      cerrarModal(); showToast('¡Entregado! Foto guardada.'); cargar();
+    })
+    .catch(function(e){ btn.textContent='Confirmar'; btn.disabled=false; showToast('No se pudo: '+(e&&e.message?e.message:e)); });
+}
+</script>
+</body>
+</html>
