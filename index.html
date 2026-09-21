@@ -87,6 +87,8 @@
       <div><label>Telefono</label><input type="tel" id="ft-telefono" placeholder="222 123 4567" /></div>
       <div><label>WhatsApp</label><input type="tel" id="ft-whatsapp" placeholder="222 123 4567" /></div>
     </div>
+    <label>Correo (para avisos, opcional)</label>
+    <input type="email" id="ft-correo" placeholder="cliente@correo.com" />
 
     <div class="form-row-3" style="margin-top:4px">
       <div>
@@ -469,6 +471,7 @@ function guardarPedidoTel(){
   var cliente = document.getElementById('ft-cliente').value.trim();
   var telefono = document.getElementById('ft-telefono').value.trim();
   var whatsapp = document.getElementById('ft-whatsapp').value.trim();
+  var correo = document.getElementById('ft-correo').value.trim();
   var tipo = document.getElementById('ft-tipo').value;
   var comprobante = document.getElementById('ft-comprobante').value;
   var pago = document.getElementById('ft-pago').value;
@@ -495,7 +498,7 @@ function guardarPedidoTel(){
   btn.textContent = 'Guardando...'; btn.disabled = true;
 
   var cabecera = {
-    cliente: cliente, telefono: telefono || null, whatsapp: whatsapp || null,
+    cliente: cliente, telefono: telefono || null, whatsapp: whatsapp || null, correo: correo || null,
     tipo: tipo, tipo_comprobante: comprobante || null, forma_pago: pago || null,
     fecha_entrega_est: fechaEst || null,
     direccion: (tipo === 'domicilio' ? (direccion || null) : null),
@@ -535,7 +538,7 @@ function guardarPedidoTel(){
 }
 
 function limpiarFormTel(){
-  ['ft-cliente','ft-telefono','ft-whatsapp','ft-fecha-entrega-est','ft-total','ft-direccion','ft-referencias'].forEach(function(id){ document.getElementById(id).value=''; });
+  ['ft-cliente','ft-telefono','ft-whatsapp','ft-correo','ft-fecha-entrega-est','ft-total','ft-direccion','ft-referencias'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('ft-tipo').value='';
   document.getElementById('ft-dir-bloque').classList.add('hidden');
   document.getElementById('ft-comprobante').value='';
