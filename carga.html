@@ -71,7 +71,7 @@ function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,
 
 function cargar(){
   if (!sb) return;
-  sb.from('pedidos').select('id,cliente,telefono,whatsapp,direccion,referencias, pedido_articulos(id)')
+  sb.from('pedidos').select('id,cliente,correo,telefono,whatsapp,direccion,referencias, pedido_articulos(id)')
     .eq('tipo','domicilio').eq('estatus','listo').order('creado_en',{ascending:true})
     .then(function(r){ if(!r.error){ LISTOS=r.data||[]; render(); } });
   // resumen de cargas por camioneta (en_camioneta + en_ruta)
@@ -99,13 +99,20 @@ function render(){
 
 function cargarEn(id, cam){
   if(!sb) return;
+  var p = LISTOS.filter(function(x){return x.id===id;})[0];
   sb.from('pedidos').update({ estatus:'en_camioneta', camioneta:cam })
     .eq('id', id).eq('estatus','listo').select('id')
     .then(function(r){
       if(r.error){ showToast('Error: '+r.error.message); return; }
       if(!r.data||!r.data.length){ showToast('Ese pedido ya no estaba listo.'); cargar(); return; }
+      if(p) avisar(p.correo, p.cliente, 'sale_reparto', 'domicilio');
       showToast('Cargado en Camioneta '+cam); cargar();
     });
+}
+
+function avisar(to, cliente, evento, tipo){
+  if (!sb || !to) return;
+  try { sb.functions.invoke('enviar-correo', { body:{ to:to, cliente:cliente||'', evento:evento, tipo:tipo||'' } }).then(function(){}, function(){}); } catch(e){}
 }
 </script>
 </body>
