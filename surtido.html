@@ -217,10 +217,17 @@ function guardar(confirmar){
     })
     .then(function(r2){
       if (r2.error) throw r2.error;
+      if (confirmar) avisar(ACTUAL.correo, ACTUAL.cliente, 'listo', ACTUAL.tipo);
       showToast(confirmar ? 'Surtido confirmado. Pedido listo.' : 'Cambios guardados.');
       if (confirmar) volver();
     })
     .catch(function(e){ showToast('No se pudo guardar: '+(e&&e.message?e.message:e)); });
+}
+
+// Aviso por correo: solo si hay correo; nunca frena la operación.
+function avisar(to, cliente, evento, tipo){
+  if (!sb || !to) return;
+  try { sb.functions.invoke('enviar-correo', { body:{ to:to, cliente:cliente||'', evento:evento, tipo:tipo||'' } }).then(function(){}, function(){}); } catch(e){}
 }
 </script>
 </body>
