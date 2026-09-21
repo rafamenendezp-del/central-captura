@@ -126,7 +126,7 @@ function restaurarCam(){ var c=localStorage.getItem('central_chofer_cam'); if(c)
 
 function cargar(){
   if(!sb) return;
-  sb.from('pedidos').select('id,cliente,telefono,whatsapp,direccion,referencias,estatus')
+  sb.from('pedidos').select('id,cliente,correo,telefono,whatsapp,direccion,referencias,estatus')
     .in('estatus',['en_camioneta','en_ruta']).eq('camioneta', camSel()).order('asignado_en',{ascending:true})
     .then(function(r){ if(!r.error){ CARGA=r.data||[]; render(); } });
 }
@@ -148,10 +148,17 @@ function render(){
 }
 
 function salioRuta(id){
+  var p = CARGA.filter(function(x){return x.id===id;})[0];
   sb.from('pedidos').update({ estatus:'en_ruta' }).eq('id', id).then(function(r){
     if(r.error){ showToast('Error: '+r.error.message); return; }
-    showToast('En ruta. (El aviso al cliente se conecta después.)'); cargar();
+    if(p) avisar(p.correo, p.cliente, 'en_ruta', 'domicilio');
+    showToast('En ruta. Aviso enviado al cliente si tiene correo.'); cargar();
   });
+}
+
+function avisar(to, cliente, evento, tipo){
+  if (!sb || !to) return;
+  try { sb.functions.invoke('enviar-correo', { body:{ to:to, cliente:cliente||'', evento:evento, tipo:tipo||'' } }).then(function(){}, function(){}); } catch(e){}
 }
 
 /* ---- entrega con foto ---- */
