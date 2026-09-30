@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Choferes y carga</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:640px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864}
+  .sub{font-size:13px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  a.link{color:#1F3864;font-size:13px;text-decoration:none;font-weight:bold}
+  .card{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:14px;margin-bottom:14px}
+  label{display:block;font-size:11px;color:#6b7d95;margin-bottom:3px;font-weight:600;text-transform:uppercase}
+  input,select{width:100%;padding:10px;border:1px solid #cdd9e8;border-radius:8px;font-size:14px;background:#fff}
+  input:focus,select:focus{outline:none;border-color:#1F3864}
+  .fila{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+  .fila .campo{flex:1;min-width:110px}
+  .btn{padding:10px 14px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;background:#1F3864;color:#fff}
+  .btn.sm{padding:7px 10px;font-size:12px}
+  .btn.verde{background:#2E7D32}.btn.gris{background:#7a889c}.btn.rojo{background:#C0392B}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 8px;text-align:left;border-bottom:1px solid #eef2f7}
+  th{color:#6b7d95;font-size:11px;text-transform:uppercase}
+  tr.inactivo{opacity:.5}
+  .badge{padding:3px 8px;border-radius:10px;font-size:11px;font-weight:bold}
+  .b-chofer{background:#e7f0ff;color:#1F6FB2}.b-carga{background:#efe7fb;color:#6C4AB6}
+  .b-si{background:#E4F4E8;color:#1a7f37}.b-no{background:#FDECEA;color:#c0392b}
+  .conteo{font-size:12px;color:#6b7d95;margin-bottom:8px}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1c2a3a;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
+  #toast.on{opacity:1}
+  .vacio{text-align:center;color:#6b7d95;padding:24px;font-size:14px}
+  .nota{font-size:12px;color:#7f93b0;margin-top:10px}
+</style>
+</head>
+<body>
+<div id="gate" style="position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100">Verificando sesión…</div>
+<div class="app">
+  <h1>CENTRAL · Choferes y encargados de carga</h1>
+  <div class="sub">
+    <span>Padrón · <a class="link" href="tablero.html">Tablero</a> · <a class="link" href="despachadores.html">Despachadores</a></span>
+    <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="salir();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
+  </div>
+
+  <div class="card">
+    <div class="fila">
+      <div class="campo"><label>Número</label><input id="n-numero" type="text" inputmode="numeric" placeholder="Ej. 50"></div>
+      <div class="campo" style="flex:2"><label>Nombre</label><input id="n-nombre" type="text" placeholder="Nombre"></div>
+      <div class="campo"><label>Rol</label>
+        <select id="n-rol"><option value="chofer">Chofer</option><option value="carga">Encargado de carga</option></select></div>
+      <button class="btn verde" onclick="agregar()">Agregar</button>
+    </div>
+    <div class="nota">El <b>número</b> es con el que esa persona iniciará sesión (no debe repetirse con un despachador).</div>
+  </div>
+
+  <div class="conteo" id="conteo"></div>
+  <div class="card"><div id="lista"></div></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="roles.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+
+function salir(){ cerrarSesionRol(sb); }
+
+// Solo la oficina puede administrar el padrón
+protegerRol(sb, ['oficina','admin'], function(){ cargar(); });
+
+var LISTA=[];
+function showToast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on');},2600); }
+function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+var ROLES={ chofer:['Chofer','b-chofer'], carga:['Encargado de carga','b-carga'] };
+
+function cargar(){
+  if (!sb) return;
+  sb.from('personal').select('*').order('rol').then(function(r){
+    if (r.error){ showToast('Error al cargar: '+r.error.message); return; }
+    LISTA=r.data||[]; render();
+  });
+}
+
+function render(){
+  document.getElementById('conteo').textContent = LISTA.length+' persona(s) · '+LISTA.filter(function(d){return d.activo;}).length+' activo(s)';
+  var c=document.getElementById('lista');
+  if(!LISTA.length){ c.innerHTML='<div class="vacio">Aún no hay choferes ni encargados. Agrega el primero arriba.</div>'; return; }
+  c.innerHTML='<table><thead><tr><th>Número</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>'+
+    LISTA.map(function(d){
+      var rl=ROLES[d.rol]||[d.rol,'b-chofer'];
+      return '<tr class="'+(d.activo?'':'inactivo')+'">'+
+        '<td><b>'+esc(d.numero)+'</b></td><td>'+esc(d.nombre||'—')+'</td>'+
+        '<td><span class="badge '+rl[1]+'">'+rl[0]+'</span></td>'+
+        '<td><span class="badge '+(d.activo?'b-si':'b-no')+'">'+(d.activo?'Activo':'Inactivo')+'</span></td>'+
+        '<td style="text-align:right;white-space:nowrap">'+
+          '<button class="btn sm '+(d.activo?'gris':'verde')+'" onclick="toggle(\''+d.numero+'\','+(d.activo?'false':'true')+')">'+(d.activo?'Desactivar':'Activar')+'</button> '+
+          '<button class="btn sm rojo" onclick="eliminar(\''+d.numero+'\')">Eliminar</button>'+
+        '</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+
+function agregar(){
+  if(!sb) return;
+  var numero=document.getElementById('n-numero').value.trim();
+  var nombre=document.getElementById('n-nombre').value.trim();
+  var rol=document.getElementById('n-rol').value;
+  if(!numero){ showToast('Escribe el número'); return; }
+  sb.from('personal').insert({ numero:numero, nombre:nombre||null, rol:rol, activo:true }).then(function(r){
+    if(r.error){
+      if((r.error.message||'').toLowerCase().indexOf('duplicate')>=0) showToast('Ya existe alguien con el número '+numero);
+      else showToast('No se pudo agregar: '+r.error.message);
+      return;
+    }
+    document.getElementById('n-numero').value=''; document.getElementById('n-nombre').value='';
+    showToast('Agregado'); cargar();
+  });
+}
+function toggle(numero, aActivo){
+  sb.from('personal').update({ activo:aActivo }).eq('numero', numero).then(function(r){
+    if(r.error){ showToast('No se pudo: '+r.error.message); return; } cargar();
+  });
+}
+function eliminar(numero){
+  if(!confirm('¿Eliminar a '+numero+'?')) return;
+  sb.from('personal').delete().eq('numero', numero).then(function(r){
+    if(r.error){ showToast('No se pudo: '+r.error.message); return; } showToast('Eliminado'); cargar();
+  });
+}
+</script>
+</body>
+</html>
