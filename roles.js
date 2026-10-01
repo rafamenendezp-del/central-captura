@@ -47,4 +47,17 @@ function protegerRol(sb, permitidos, onOk){
   });
 }
 
+// Determina el rol de un número (sin proteger nada) y lo devuelve por callback.
+function rolDe(sb, num, cb){
+  sb.from('despachadores').select('numero').eq('numero', num).eq('activo', true).then(function(rd){
+    if (rd.data && rd.data.length){ cb('despachador'); return; }
+    sb.from('personal').select('rol').eq('numero', num).eq('activo', true).then(function(rp){
+      cb((rp.data && rp.data.length) ? rp.data[0].rol : 'oficina');
+    });
+  });
+}
+
+// Manda al usuario a la pantalla que le toca según su rol (se usa tras iniciar sesión).
+function irSegunRol(sb, numero){ rolDe(sb, numero, function(rol){ location.href = ROL_HOME[rol] || 'tablero.html'; }); }
+
 function cerrarSesionRol(sb){ if (sb) sb.auth.signOut().then(function(){ location.href = 'login.html'; }); }
