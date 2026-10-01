@@ -36,6 +36,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
+<script src="roles.js"></script>
 <script>
 var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
 var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
@@ -45,13 +46,6 @@ try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supab
 
 function aviso(txt){ var a=document.getElementById('aviso'); a.textContent=txt; a.classList.add('err'); a.style.display='block'; }
 
-// enruta segun rol: despachador -> pedidos-libres, oficina -> tablero
-function irSegunRol(numero){
-  sb.from('despachadores').select('numero').eq('numero', numero).eq('activo', true).then(function(rr){
-    location.href = (rr.data && rr.data.length) ? 'pedidos-libres.html' : 'tablero.html';
-  });
-}
-
 if (!sb){
   aviso('Falta config.js con tu Project URL y anon key.');
 } else {
@@ -59,7 +53,7 @@ if (!sb){
   sb.auth.getSession().then(function(r){
     if (r.data.session){
       var em=(r.data.session.user&&r.data.session.user.email)||'';
-      irSegunRol(em.split('@')[0]);
+      irSegunRol(sb, em.split('@')[0]);
     }
   });
 }
@@ -86,7 +80,7 @@ function entrar(){
       }
       return;
     }
-    irSegunRol(numero);
+    irSegunRol(sb, numero);
   }).catch(function(e){
     btn.textContent = 'Entrar'; btn.disabled = false;
     aviso('Falló la conexión: ' + (e && e.message ? e.message : e));
