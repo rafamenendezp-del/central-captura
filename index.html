@@ -125,6 +125,9 @@
     <label style="margin-top:12px">Fecha estimada de entrega</label>
     <input type="date" id="ft-fecha-entrega-est" />
 
+    <label style="margin-top:12px">Despachador (opcional)</label>
+    <select id="ft-despachador"><option value="">Dejar libre (se asigna después)</option></select>
+
     <div id="ft-dir-bloque" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #cdd9e8;border-radius:10px;background:#f8fbff">
       <label style="margin-top:0;color:#1F3864">Dirección de entrega *</label>
       <input type="text" id="ft-direccion" placeholder="Calle, número, colonia" />
@@ -204,7 +207,17 @@ if (!sb) {
 
 /* ---------- reja de sesion (solo oficina) ---------- */
 function cerrarSesion(){ cerrarSesionRol(sb); }
-protegerRol(sb, ['oficina','admin'], function(){});
+var DESP_CAP = [];
+function cargarDespachadores(){
+  if (!sb) return;
+  sb.from('despachadores').select('numero,nombre').eq('activo', true).order('numero').then(function(r){
+    if (r.error || !r.data) return;
+    DESP_CAP = r.data;
+    var sel = document.getElementById('ft-despachador');
+    r.data.forEach(function(d){ var o=document.createElement('option'); o.value=d.numero; o.textContent=d.numero+(d.nombre?(' · '+d.nombre):''); sel.appendChild(o); });
+  });
+}
+protegerRol(sb, ['oficina','admin'], function(){ cargarDespachadores(); });
 
 var ticketBase64 = '';
 
@@ -468,6 +481,8 @@ function guardarPedidoTel(){
   var totalRaw = document.getElementById('ft-total').value;
   var direccion = document.getElementById('ft-direccion').value.trim();
   var referencias = document.getElementById('ft-referencias').value.trim();
+  var despNum = document.getElementById('ft-despachador').value;
+  var despObj = DESP_CAP.filter(function(d){ return d.numero===despNum; })[0];
 
   if (!sb){ showToast('Falta configurar Supabase (lineas 🔴).'); return; }
   if (!cliente){ showToast('Ingresa el nombre del cliente'); return; }
@@ -485,6 +500,11 @@ function guardarPedidoTel(){
   var btn = document.getElementById('btn-guardar-tel');
   btn.textContent = 'Guardando...'; btn.disabled = true;
 
+  // Si se eligió despachador: en existencia va directo a "asignado";
+  // en "no hay" se queda pre-asignado pero pasa primero por la compra (captura).
+  var estatusInicial = 'captura';
+  if (despNum && tipo !== 'no_hay') estatusInicial = 'asignado';
+
   var cabecera = {
     cliente: cliente, telefono: telefono || null, whatsapp: whatsapp || null, correo: correo || null,
     tipo: tipo, tipo_comprobante: comprobante || null, forma_pago: pago || null,
@@ -492,7 +512,11 @@ function guardarPedidoTel(){
     direccion: (tipo === 'domicilio' ? (direccion || null) : null),
     referencias: (tipo === 'domicilio' ? (referencias || null) : null),
     total_ticket: (totalRaw === '' ? null : parseFloat(totalRaw)),
-    capturado_por: capturista || null
+    capturado_por: capturista || null,
+    estatus: estatusInicial,
+    despachador_numero: despNum || null,
+    despachador_nombre: (despObj && despObj.nombre) || null,
+    asignado_en: (despNum ? new Date().toISOString() : null)
   };
 
   sb.from('pedidos').insert(cabecera).select('id').single()
@@ -528,6 +552,7 @@ function guardarPedidoTel(){
 function limpiarFormTel(){
   ['ft-cliente','ft-telefono','ft-whatsapp','ft-correo','ft-fecha-entrega-est','ft-total','ft-direccion','ft-referencias'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('ft-tipo').value='';
+  document.getElementById('ft-despachador').value='';
   document.getElementById('ft-dir-bloque').classList.add('hidden');
   document.getElementById('ft-comprobante').value='';
   document.getElementById('ft-pago').value='';
