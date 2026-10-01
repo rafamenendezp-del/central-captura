@@ -147,16 +147,20 @@ function money(n){ return (n==null||n==='') ? '—' : ('$'+Number(n).toLocaleStr
 // llena el filtro de estatus
 (function(){ var s=document.getElementById('f-estatus'); ESTADOS.forEach(function(e){ var o=document.createElement('option'); o.value=e[0]; o.textContent=e[1]; s.appendChild(o); }); })();
 
+var DESPACHADORES = [];
 function cargar(){
   if (!sb){ return; }
   document.getElementById('conteo').textContent = 'Cargando…';
-  sb.from('pedidos').select('*, pedido_articulos(*)').order('creado_en', { ascending:false })
-    .then(function(r){
-      if (r.error){ document.getElementById('conteo').textContent=''; showToast('Error al cargar: '+r.error.message); return; }
-      PEDIDOS = r.data || [];
-      render();
-    })
-    .catch(function(e){ showToast('Fallo la conexión: '+(e&&e.message?e.message:e)); });
+  sb.from('despachadores').select('numero,nombre').eq('activo', true).order('numero').then(function(rd){
+    DESPACHADORES = (rd.data || []);
+    sb.from('pedidos').select('*, pedido_articulos(*)').order('creado_en', { ascending:false })
+      .then(function(r){
+        if (r.error){ document.getElementById('conteo').textContent=''; showToast('Error al cargar: '+r.error.message); return; }
+        PEDIDOS = r.data || [];
+        render();
+      })
+      .catch(function(e){ showToast('Fallo la conexión: '+(e&&e.message?e.message:e)); });
+  });
 }
 
 function render(){
@@ -187,7 +191,7 @@ function render(){
 
     var opts = ESTADOS.map(function(e){ return '<option value="'+e[0]+'"'+(e[0]===p.estatus?' selected':'')+'>'+e[1]+'</option>'; }).join('');
 
-    var nexts = siguientes(p.tipo, p.estatus);
+    var nexts = siguientes(p.tipo, p.estatus, !!p.despachador_numero);
     var btns = nexts.map(function(n){
       var col = (n[0]==='entregado') ? '#2E7D32' : ((n[0]==='en_camioneta'||n[0]==='en_ruta') ? '#1F6FB2' : '#1F3864');
       return '<button class="btn" style="background:'+col+'" onclick="avanzar(\''+p.id+'\',\''+n[0]+'\')">'+n[1]+'</button>';
@@ -195,6 +199,20 @@ function render(){
     var esFinal = (p.estatus==='entregado' || p.estatus==='cancelado');
     var cancelar = esFinal ? '' : '<button class="btn" style="background:#C0392B" onclick="avanzar(\''+p.id+'\',\'cancelado\')">Cancelar</button>';
     var finalMsg = '<div style="color:#6b7d95;font-size:13px;font-weight:bold">Pedido '+(p.estatus==='entregado'?'entregado ✅':'cancelado')+'</div>';
+
+    // Bloque de acción: en "por asignar" se asigna directo a un despachador; si no, botones guiados.
+    var accionBotones;
+    if (p.estatus === 'por_asignar'){
+      var opc = DESPACHADORES.map(function(d){ return '<option value="'+esc(d.numero)+'">'+esc(d.numero)+(d.nombre?(' · '+esc(d.nombre)):'')+'</option>'; }).join('');
+      accionBotones = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+        '<select id="asig-'+p.id+'" style="max-width:240px"><option value="">Asignar a despachador…</option>'+opc+'</select>'+
+        '<button class="btn" onclick="asignarDirecto(\''+p.id+'\')">Asignar</button>'+cancelar+'</div>'+
+        '<div style="font-size:11px;color:#6b7d95;margin-top:4px">O déjalo para que lo tomen en "Pedidos libres".</div>';
+    } else if (esFinal){
+      accionBotones = finalMsg;
+    } else {
+      accionBotones = '<div style="display:flex;gap:8px;flex-wrap:wrap">'+btns+' '+cancelar+'</div>';
+    }
 
     var contacto = [];
     if (p.telefono) contacto.push('Tel: '+esc(p.telefono));
@@ -221,7 +239,7 @@ function render(){
         '<table><thead><tr><th>Producto</th><th class="num">Cant.</th><th>Tipo</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead>'+
         '<tbody>'+filas+'</tbody></table></details>'+
       '<div class="p-accion" style="display:block">'+
-        (esFinal ? finalMsg : ('<div style="display:flex;gap:8px;flex-wrap:wrap">'+btns+' '+cancelar+'</div>'))+
+        accionBotones+
         '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:#6b7d95">Cambiar manualmente</summary>'+
           '<select style="margin-top:6px;max-width:280px" onchange="cambiarEstatus(\''+p.id+'\', this.value)">'+opts+'</select></details>'+
       '</div>'+
@@ -230,7 +248,7 @@ function render(){
 }
 
 // Flujo real por tipo de pedido: dado el estatus actual, cuales son los siguientes pasos.
-function siguientes(tipo, estatus){
+function siguientes(tipo, estatus, preasignado){
   var L = {
     mercancia_pedida:'Mercancía pedida al proveedor',
     en_transportes:'Llegó a transportes (CDMX)',
@@ -251,7 +269,7 @@ function siguientes(tipo, estatus){
       case 'captura':          r=[p('mercancia_pedida')]; break;
       case 'mercancia_pedida': r=[p('en_transportes')]; break;
       case 'en_transportes':   r=[p('en_tr')]; break;
-      case 'en_tr':            r=[p('por_asignar')]; break;
+      case 'en_tr':            r=[ preasignado ? ['asignado','Asignar a su despachador'] : p('por_asignar') ]; break;
       case 'por_asignar':      r=[p('asignado')]; break;
       case 'asignado':         r=[p('surtiendo')]; break;
       case 'surtiendo':        r=[p('listo')]; break;
@@ -291,6 +309,23 @@ function siguientes(tipo, estatus){
 function avanzar(id, to){
   if (to === 'cancelado' && !confirm('¿Cancelar este pedido? Esta acción lo saca del flujo.')) return;
   cambiarEstatus(id, to);
+}
+
+function asignarDirecto(id){
+  if (!sb) return;
+  var sel = document.getElementById('asig-'+id);
+  var numero = sel ? sel.value : '';
+  if (!numero){ showToast('Elige un despachador'); return; }
+  var d = DESPACHADORES.filter(function(x){ return x.numero===numero; })[0];
+  sb.from('pedidos')
+    .update({ despachador_numero:numero, despachador_nombre:(d&&d.nombre)||null, estatus:'asignado', asignado_en:new Date().toISOString() })
+    .eq('id', id).eq('estatus','por_asignar').is('despachador_numero', null)
+    .select('id')
+    .then(function(r){
+      if (r.error){ showToast('No se pudo asignar: '+r.error.message); return; }
+      if (!r.data || !r.data.length){ showToast('Ese pedido ya fue tomado o asignado.'); cargar(); return; }
+      showToast('Asignado a '+numero); cargar();
+    });
 }
 
 function verID(ruta){
