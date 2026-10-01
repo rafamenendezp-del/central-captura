@@ -97,6 +97,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
+<script src="roles.js"></script>
 <script>
 var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
 var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
@@ -313,22 +314,8 @@ function cambiarEstatus(id, nuevo){
     .catch(function(e){ showToast('Fallo: '+(e&&e.message?e.message:e)); });
 }
 
-function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href = 'login.html'; }); }
-if (sb){
-  sb.auth.getSession().then(function(r){
-    if (!r.data.session){ location.href = 'login.html'; return; }
-    var email = (r.data.session.user && r.data.session.user.email) || '';
-    var num = email.split('@')[0];
-    sb.from('despachadores').select('numero').eq('numero', num).eq('activo', true).then(function(rr){
-      if (rr.data && rr.data.length){ location.href = 'pedidos-libres.html'; return; }
-      document.getElementById('usuario').textContent = 'Usuario: ' + num;
-      document.getElementById('gate').style.display = 'none';
-      cargar();
-    });
-  });
-} else {
-  document.getElementById('gate').style.display = 'none';
-}
+function cerrarSesion(){ cerrarSesionRol(sb); }
+protegerRol(sb, ['oficina','admin'], function(){ cargar(); });
 </script>
 </body>
 </html>
