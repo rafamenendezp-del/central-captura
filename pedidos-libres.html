@@ -47,20 +47,28 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
+<script src="roles.js"></script>
 <script>
 var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
 var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
 var sb = null;
 try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
 
-function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href='login.html'; }); }
+var LIBRES = [], MINUM = '', QUIEN = null, TIMER = null;
+
+function cerrarSesion(){ cerrarSesionRol(sb); }
 if (sb){
-  sb.auth.getSession().then(function(r){
-    if (!r.data.session){ location.href='login.html'; return; }
-    var email=(r.data.session.user&&r.data.session.user.email)||'';
-    MINUM = email.split('@')[0];
-    document.getElementById('usuario').textContent='Usuario: '+MINUM;
-    document.getElementById('gate').style.display='none';
+  protegerRol(sb, ['despachador','oficina','admin'], function(yo){
+    MINUM = yo.numero;
+    if (yo.rol === 'despachador'){
+      QUIEN = { numero: yo.numero, nombre: yo.nombre };
+      var y=document.getElementById('yo'); y.style.display='block';
+      y.textContent = 'Tú: ' + yo.numero + (yo.nombre ? (' · '+yo.nombre) : '');
+    } else {
+      var a=document.getElementById('aviso');
+      a.textContent = 'Estás viendo como oficina; para tomar pedidos entra con un usuario de despachador.';
+      a.style.display='block';
+    }
     iniciar();
   });
 } else {
@@ -68,27 +76,13 @@ if (sb){
   var a=document.getElementById('aviso'); a.textContent='Falta config.js con tu Project URL y anon key.'; a.style.display='block';
 }
 
-var LIBRES = [], MINUM = '', QUIEN = null, TIMER = null;
-
 function showToast(m, tipo){ var t=document.getElementById('toast'); t.textContent=m; t.className='on'+(tipo?(' '+tipo):''); clearTimeout(t._t); t._t=setTimeout(function(){t.className='';},2800); }
 function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function money(n){ return (n==null||n==='')?'—':('$'+Number(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2})); }
 var TIPOS = { no_hay:'No hay', tienda:'Recoge en tienda', domicilio:'Domicilio' };
 
 function iniciar(){
-  // ¿el usuario de la sesion es un despachador activo del padron?
-  sb.from('despachadores').select('numero,nombre').eq('numero', MINUM).eq('activo', true).then(function(r){
-    if (!r.error && r.data && r.data.length){
-      QUIEN = r.data[0];
-      var yo=document.getElementById('yo'); yo.style.display='block';
-      yo.textContent = 'Tú: ' + QUIEN.numero + (QUIEN.nombre ? (' · '+QUIEN.nombre) : '');
-    } else {
-      var a=document.getElementById('aviso');
-      a.textContent = 'Tu usuario ('+MINUM+') no está en el padrón de despachadores activos, así que no puedes tomar pedidos. Pide que te den de alta.';
-      a.style.display='block';
-    }
-    cargar();
-  });
+  cargar();
   if (TIMER) clearInterval(TIMER);
   TIMER = setInterval(cargar, 6000);
 }
