@@ -84,22 +84,16 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
+<script src="roles.js"></script>
 <script>
 var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
 var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
 var sb = null;
 try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
 
-function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href='login.html'; }); }
+function cerrarSesion(){ cerrarSesionRol(sb); }
 if (sb){
-  sb.auth.getSession().then(function(r){
-    if (!r.data.session){ location.href='login.html'; return; }
-    var email=(r.data.session.user&&r.data.session.user.email)||'';
-    MINUM = email.split('@')[0];
-    document.getElementById('usuario').textContent='Usuario: '+MINUM;
-    document.getElementById('gate').style.display='none';
-    cargar();
-  });
+  protegerRol(sb, ['despachador','oficina','admin'], function(yo){ MINUM = yo.numero; cargar(); });
 } else {
   document.getElementById('gate').style.display='none';
   var a=document.getElementById('aviso'); a.textContent='Falta config.js con tu Project URL y anon key.'; a.style.display='block';
