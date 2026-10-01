@@ -184,6 +184,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
+<script src="roles.js"></script>
 <script>
 /* Los datos de conexion viven en config.js (se llena UNA vez y no se vuelve a tocar). */
 var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
@@ -201,22 +202,9 @@ if (!sb) {
   a.classList.remove('hidden');
 }
 
-/* ---------- reja de sesion ---------- */
-function cerrarSesion(){ if (sb) sb.auth.signOut().then(function(){ location.href = 'login.html'; }); }
-if (sb){
-  sb.auth.getSession().then(function(r){
-    if (!r.data.session){ location.href = 'login.html'; return; }
-    var email = (r.data.session.user && r.data.session.user.email) || '';
-    var num = email.split('@')[0];
-    sb.from('despachadores').select('numero').eq('numero', num).eq('activo', true).then(function(rr){
-      if (rr.data && rr.data.length){ location.href = 'pedidos-libres.html'; return; }
-      document.getElementById('usuario').textContent = 'Usuario: ' + num;
-      document.getElementById('gate').style.display = 'none';
-    });
-  });
-} else {
-  document.getElementById('gate').style.display = 'none';
-}
+/* ---------- reja de sesion (solo oficina) ---------- */
+function cerrarSesion(){ cerrarSesionRol(sb); }
+protegerRol(sb, ['oficina','admin'], function(){});
 
 var ticketBase64 = '';
 
