@@ -60,6 +60,12 @@
          opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90%}
   #toast.on{opacity:1}
   .aviso-cfg{background:#FDECEA;color:#c0392b;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:14px}
+  .ac-wrap{position:relative}
+  .ac-list{position:absolute;left:0;right:0;top:100%;z-index:40;background:#fff;border:1px solid #cdd9e8;border-top:none;border-radius:0 0 8px 8px;max-height:230px;overflow:auto;box-shadow:0 8px 18px rgba(0,0,0,.14);display:none}
+  .ac-list.on{display:block}
+  .ac-item{padding:9px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f4f9;color:#1c2a3a}
+  .ac-item:hover{background:#eef5ff}
+  .ac-item small{color:#6b7d95}
 </style>
 </head>
 <body>
@@ -79,7 +85,14 @@
     <label>Capturista</label>
     <input type="text" id="ft-capturista" placeholder="Tu nombre" />
 
-    <label>Nombre del cliente *</label>
+    <label>Buscar cliente (del catálogo)</label>
+    <div class="ac-wrap">
+      <input type="text" id="ft-buscar-cliente" autocomplete="off" placeholder="Escribe el nombre y elígelo…" oninput="buscarCliente(this.value)" onblur="setTimeout(cerrarCli,150)" />
+      <div class="ac-list" id="ft-cli-list"></div>
+    </div>
+    <div style="font-size:11px;color:#6b7d95;margin:2px 0 0">Si no aparece, captúralo a mano abajo (se registra en tu POS como siempre).</div>
+
+    <label style="margin-top:10px">Nombre del cliente *</label>
     <input type="text" id="ft-cliente" placeholder="Ej. Maria Lopez" />
 
     <label style="color:#1F3864">Contacto <span style="font-weight:400;color:#791F1F">(al menos uno)</span></label>
@@ -217,7 +230,74 @@ function cargarDespachadores(){
     r.data.forEach(function(d){ var o=document.createElement('option'); o.value=d.numero; o.textContent=d.numero+(d.nombre?(' · '+d.nombre):''); sel.appendChild(o); });
   });
 }
-protegerRol(sb, ['oficina','admin'], function(){ cargarDespachadores(); });
+protegerRol(sb, ['oficina','admin'], function(){ cargarDespachadores(); cargarProductos(); });
+
+function escH(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ===== Buscador de cliente (catálogo del POS, solo lectura) ===== */
+var CLI_RES=[], CLI_TMR=null;
+function buscarCliente(q){
+  q=(q||'').trim();
+  var list=document.getElementById('ft-cli-list');
+  if(!sb || q.length<2){ list.classList.remove('on'); list.innerHTML=''; return; }
+  if(CLI_TMR) clearTimeout(CLI_TMR);
+  CLI_TMR=setTimeout(function(){
+    sb.from('clientes').select('registro,nombre,telefono1,telefono2,celular1,celular2,email1,direccion')
+      .ilike('nombre','%'+q+'%').order('nombre').limit(8)
+      .then(function(r){
+        if(r.error||!r.data){ list.classList.remove('on'); return; }
+        CLI_RES=r.data;
+        if(!r.data.length){ list.innerHTML='<div class="ac-item" style="color:#6b7d95;cursor:default">Sin coincidencias — captúralo a mano abajo</div>'; list.classList.add('on'); return; }
+        list.innerHTML=r.data.map(function(c,i){
+          var tel=c.telefono1||c.celular1||'';
+          return '<div class="ac-item" onmousedown="elegirCliente('+i+')"><b>'+escH(c.nombre)+'</b>'+(tel?(' <small>'+escH(tel)+'</small>'):'')+'</div>';
+        }).join('');
+        list.classList.add('on');
+      });
+  },300);
+}
+function elegirCliente(i){
+  var c=CLI_RES[i]; if(!c) return;
+  document.getElementById('ft-cliente').value=c.nombre||'';
+  document.getElementById('ft-telefono').value=c.telefono1||c.telefono2||'';
+  document.getElementById('ft-whatsapp').value=c.celular1||c.celular2||'';
+  document.getElementById('ft-correo').value=c.email1||'';
+  if(c.direccion) document.getElementById('ft-direccion').value=c.direccion;
+  document.getElementById('ft-buscar-cliente').value=c.nombre||'';
+  cerrarCli();
+}
+function cerrarCli(){ document.getElementById('ft-cli-list').classList.remove('on'); }
+
+/* ===== Autocompletar producto (catálogo, excepto dados de baja) ===== */
+var PRODUCTOS=[];
+function cargarProductos(){
+  if(!sb) return;
+  sb.from('productos').select('registro,nombre,unidad').eq('baja',0).order('nombre').then(function(r){
+    if(!r.error && r.data) PRODUCTOS=r.data;
+  });
+}
+function acProd(inp){
+  var q=(inp.value||'').trim().toUpperCase();
+  var list=inp.parentNode.querySelector('.ac-list');
+  if(q.length<2){ list.classList.remove('on'); list.innerHTML=''; return; }
+  var res=[];
+  for(var i=0;i<PRODUCTOS.length && res.length<12;i++){
+    if(String(PRODUCTOS[i].nombre||'').toUpperCase().indexOf(q)>=0) res.push(PRODUCTOS[i]);
+  }
+  if(!res.length){ list.classList.remove('on'); list.innerHTML=''; return; }
+  list.innerHTML=res.map(function(p){
+    return '<div class="ac-item" onmousedown="acElegir(this)" data-nom="'+escH(p.nombre)+'" data-uni="'+escH(p.unidad||'')+'"><b>'+escH(p.nombre)+'</b>'+(p.unidad?(' <small>'+escH(p.unidad)+'</small>'):'')+'</div>';
+  }).join('');
+  list.classList.add('on');
+}
+function acElegir(item){
+  var wrap=item.closest('.ac-wrap'), row=item.closest('.art-linea');
+  wrap.querySelector('.art-prod').value=item.getAttribute('data-nom');
+  var uni=item.getAttribute('data-uni');
+  if(uni){ var u=row.querySelector('.art-unid'); if(u && !u.value.trim()) u.value=uni; }
+  wrap.querySelector('.ac-list').classList.remove('on');
+}
+function acCerrar(inp){ var list=inp.parentNode.querySelector('.ac-list'); setTimeout(function(){ list.classList.remove('on'); },150); }
 
 var ticketBase64 = '';
 
@@ -269,7 +349,8 @@ function agregarLineaArt(data){
       '<button class="btn btn-sm btn-danger" onclick="quitarLineaArt(this)">Quitar</button></div>'+
     '<div class="art-row-2">'+
       '<div><div class="art-mini-lbl">Articulo</div>'+
-        '<input type="text" class="art-prod" placeholder="Producto / descripcion" value="'+(data.producto?q(data.producto):'')+'"></div>'+
+        '<div class="ac-wrap"><input type="text" class="art-prod" autocomplete="off" placeholder="Producto / descripcion" value="'+(data.producto?q(data.producto):'')+'" oninput="acProd(this)" onblur="acCerrar(this)">'+
+        '<div class="ac-list"></div></div></div>'+
       '<div><div class="art-mini-lbl">Color o modelo</div>'+
         '<input type="text" class="art-color" placeholder="Color o modelo" value="'+(data.colorModelo?q(data.colorModelo):'')+'"></div>'+
     '</div>'+
