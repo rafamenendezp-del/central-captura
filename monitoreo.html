@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CENTRAL · Monitoreo</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#1c2a3a;padding:16px}
+  .app{max-width:760px;margin:0 auto}
+  h1{font-size:20px;color:#1F3864}
+  .sub{font-size:13px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  a.link{color:#1F3864;font-size:13px;text-decoration:none;font-weight:bold}
+  .barra{background:#fff;border:1px solid #dce6f1;border-radius:12px;padding:10px 12px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  label{font-size:12px;color:#6b7d95;font-weight:600}
+  select{padding:8px;border:1px solid #cdd9e8;border-radius:8px;font-size:14px;background:#fff}
+  .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#33465c}
+  .btn{padding:8px 12px;border:none;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;background:#1F3864;color:#fff}
+  .conteo{font-size:12px;color:#6b7d95;margin-bottom:8px}
+  .ped{background:#fff;border:1px solid #dce6f1;border-left:5px solid #cdd9e8;border-radius:10px;padding:12px;margin-bottom:9px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+  .ped.ambar{border-left-color:#C08A1E;background:#fffaf0}
+  .ped.rojo{border-left-color:#C0392B;background:#fdf1f0}
+  .ped-cli{font-size:15px;font-weight:bold}
+  .ped-meta{font-size:12px;color:#6b7d95;margin-top:2px}
+  .badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:bold;color:#fff}
+  .e-gris{background:#7a889c}.e-azul{background:#1F6FB2}.e-mora{background:#6C4AB6}.e-ambar{background:#C08A1E}.e-verde{background:#2E7D32}
+  .tiempo{text-align:right;white-space:nowrap}
+  .tiempo .h{font-size:17px;font-weight:bold}
+  .tiempo.ambar .h{color:#C08A1E}.tiempo.rojo .h{color:#C0392B}
+  .tiempo .lbl{font-size:11px;color:#6b7d95}
+  .vacio{text-align:center;color:#6b7d95;padding:30px;font-size:14px}
+  #gate{position:fixed;inset:0;background:#eef2f7;display:flex;align-items:center;justify-content:center;color:#6b7d95;z-index:100}
+</style>
+</head>
+<body>
+<div id="gate">Verificando sesión…</div>
+<div class="app">
+  <h1>CENTRAL · Monitoreo</h1>
+  <div class="sub">
+    <span>Pedidos en proceso · <a class="link" href="tablero.html">Tablero</a></span>
+    <span><span id="usuario" style="color:#6b7d95;margin-right:10px"></span><a href="#" onclick="salir();return false;" style="color:#C0392B;font-weight:bold;text-decoration:none">Salir</a></span>
+  </div>
+
+  <div class="barra">
+    <div><label>Etapa</label> <select id="f-estatus" onchange="render()"><option value="">Todas</option></select></div>
+    <label class="chk"><input type="checkbox" id="f-atraso" onchange="render()"> Solo atrasados</label>
+    <button class="btn" onclick="cargar()" style="margin-left:auto">↻ Actualizar</button>
+  </div>
+
+  <div class="conteo" id="conteo"></div>
+  <div id="lista"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="roles.js"></script>
+<script>
+var SUPABASE_URL  = window.CENTRAL_URL  || "PON_AQUI_TU_PROJECT_URL";
+var SUPABASE_ANON = window.CENTRAL_ANON || "PON_AQUI_TU_ANON_KEY";
+var sb = null;
+try { if (window.supabase && SUPABASE_URL.indexOf('http')===0) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e){}
+function salir(){ cerrarSesionRol(sb); }
+protegerRol(sb, ['oficina','admin'], function(){ cargar(); setInterval(cargar, 60000); });
+
+// etapas activas: value -> [etiqueta, color, horas_ambar, horas_rojo]
+var ESTADOS = [
+  ['captura',          'Capturado',            'e-gris', 4, 12],
+  ['mercancia_pedida', 'Mercancía pedida',     'e-mora', 24, 72],
+  ['en_transportes',   'En transportes',       'e-mora', 24, 72],
+  ['en_tr',            'En tienda (TR)',        'e-mora', 4, 12],
+  ['por_asignar',      'Por asignar',          'e-azul', 1, 3],
+  ['asignado',         'Asignado',             'e-azul', 2, 5],
+  ['surtiendo',        'Surtiendo',            'e-ambar', 2, 5],
+  ['listo',            'Listo',                'e-verde', 24, 72],
+  ['en_camioneta',     'En camioneta',         'e-azul', 6, 12],
+  ['en_ruta',          'En ruta',              'e-azul', 6, 12]
+];
+function info(v){ for(var i=0;i<ESTADOS.length;i++){ if(ESTADOS[i][0]===v) return ESTADOS[i]; } return [v,v,'e-gris',6,24]; }
+var TIPOS = { no_hay:'No hay', tienda:'Tienda', domicilio:'Domicilio' };
+
+var ACTIVOS = [];
+function esc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// llena el filtro de etapas
+(function(){ var s=document.getElementById('f-estatus'); ESTADOS.forEach(function(e){ var o=document.createElement('option'); o.value=e[0]; o.textContent=e[1]; s.appendChild(o); }); })();
+
+function cargar(){
+  if(!sb) return;
+  document.getElementById('conteo').textContent='Cargando…';
+  sb.from('pedidos').select('id,cliente,tipo,estatus,estatus_desde,despachador_numero,despachador_nombre,camioneta')
+    .not('estatus','in','(entregado,cancelado)').order('estatus_desde',{ascending:true})
+    .then(function(r){
+      if(r.error){ document.getElementById('conteo').textContent=''; document.getElementById('lista').innerHTML='<div class="vacio">Error: '+esc(r.error.message)+'</div>'; return; }
+      ACTIVOS = r.data || []; render();
+    });
+}
+
+function horasEn(iso){ if(!iso) return 0; return (Date.now() - new Date(iso).getTime())/3600000; }
+function fmt(h){
+  var min = Math.round(h*60);
+  if (min < 60) return min+'m';
+  var hh = Math.floor(min/60), mm = min%60;
+  if (hh < 24) return hh+'h '+(mm?mm+'m':'');
+  var d = Math.floor(hh/24), rh = hh%24;
+  return d+'d '+(rh?rh+'h':'');
+}
+
+function render(){
+  var fe = document.getElementById('f-estatus').value;
+  var soloAtraso = document.getElementById('f-atraso').checked;
+
+  var lista = ACTIVOS.map(function(p){
+    var ei = info(p.estatus);
+    var h = horasEn(p.estatus_desde);
+    var nivel = (h >= ei[4]) ? 'rojo' : (h >= ei[3] ? 'ambar' : 'ok');
+    return { p:p, ei:ei, h:h, nivel:nivel };
+  }).filter(function(x){
+    if (fe && x.p.estatus !== fe) return false;
+    if (soloAtraso && x.nivel === 'ok') return false;
+    return true;
+  });
+
+  var nAtraso = lista.filter(function(x){ return x.nivel!=='ok'; }).length;
+  document.getElementById('conteo').textContent = lista.length+' pedido(s) en proceso · '+nAtraso+' atrasado(s)';
+
+  var c = document.getElementById('lista');
+  if(!lista.length){ c.innerHTML='<div class="vacio">Nada que mostrar con esos filtros. 🎉</div>'; return; }
+  c.innerHTML = lista.map(function(x){
+    var p=x.p, ei=x.ei;
+    var quien = p.despachador_numero ? ('Desp. '+esc(p.despachador_numero)+(p.despachador_nombre?(' · '+esc(p.despachador_nombre)):'')) : (p.camioneta?('Camioneta '+esc(p.camioneta)):'sin asignar');
+    return '<div class="ped '+(x.nivel==='ok'?'':x.nivel)+'">'+
+      '<div><div class="ped-cli">'+esc(p.cliente||'(sin nombre)')+'</div>'+
+        '<div class="ped-meta"><span class="badge '+ei[2]+'">'+ei[1]+'</span> · '+(TIPOS[p.tipo]||p.tipo||'')+' · '+quien+'</div></div>'+
+      '<div class="tiempo '+(x.nivel==='ok'?'':x.nivel)+'"><div class="h">'+fmt(x.h)+'</div><div class="lbl">en esta etapa</div></div>'+
+    '</div>';
+  }).join('');
+}
+</script>
+</body>
+</html>
