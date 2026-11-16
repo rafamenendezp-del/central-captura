@@ -36,6 +36,8 @@
   .aviso{background:#FDECEA;color:#c0392b;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
   .vacio{text-align:center;color:#6b7d95;padding:30px 10px;font-size:14px}
   .hidden{display:none}
+  .up{text-transform:uppercase}
+  .ro{background:#f1f4f8;color:#44607f;font-weight:600}
 </style>
 </head>
 <body>
@@ -69,8 +71,8 @@
       <div style="font-size:11px;color:#777;margin:2px 0 8px">Ajusta metros/piezas, precios e importes según lo que realmente surtiste.</div>
       <div id="arts"></div>
 
-      <label style="margin-top:12px">Total</label>
-      <input type="number" id="e-total" step="0.01" min="0" placeholder="$">
+      <label style="margin-top:12px">Total <span style="text-transform:none;font-weight:400;color:#8a93a3">(suma automática)</span></label>
+      <input type="number" id="e-total" class="ro" readonly placeholder="$">
 
       <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
         <button class="btn" style="flex:1" onclick="guardar(false)">Guardar cambios</button>
@@ -143,10 +145,10 @@ function surtir(id){
   }
   document.getElementById('e-cliente').textContent = ACTUAL.cliente || '(sin nombre)';
   document.getElementById('e-meta').textContent = (TIPOS[ACTUAL.tipo]||ACTUAL.tipo||'');
-  document.getElementById('e-total').value = (ACTUAL.total_ticket!=null?ACTUAL.total_ticket:'');
   var cont = document.getElementById('arts'); cont.innerHTML='';
   var arts = (ACTUAL.pedido_articulos||[]).slice().sort(function(a,b){return (a.orden||0)-(b.orden||0);});
   if (!arts.length) agregarArt(); else arts.forEach(function(a){ agregarArt(a); });
+  recalcTotalS(); // total = suma de importes (recalculados)
   document.getElementById('vista-lista').classList.add('hidden');
   document.getElementById('vista-editor').classList.remove('hidden');
   window.scrollTo(0,0);
@@ -162,19 +164,37 @@ function renum(){ document.querySelectorAll('#arts .art').forEach(function(l,i){
 function agregarArt(d){
   d=d||{};
   function q(v){ return v!=null?String(v).replace(/"/g,'&quot;'):''; }
+  // importe inicial = cantidad x precio (recalculado, no se usa el guardado)
+  var impIni='';
+  if(d.cantidad!=null && d.cantidad!=='' && d.precio!=null && d.precio!==''){
+    var ii=parseFloat(d.cantidad)*parseFloat(d.precio);
+    if(!isNaN(ii)) impIni=Math.round(ii*100)/100;
+  }
   var div=document.createElement('div'); div.className='art';
   div.innerHTML=
     '<div class="art-head"><span class="art-num"></span><button class="btn sm rojo" onclick="quitarArt(this)">Quitar</button></div>'+
-    '<div class="r2"><div><div class="mini">Artículo</div><input class="a-prod" value="'+q(d.producto)+'" placeholder="Producto"></div>'+
-      '<div><div class="mini">Color/modelo</div><input class="a-color" value="'+q(d.color_modelo)+'" placeholder="Color o modelo"></div></div>'+
+    '<div class="r2"><div><div class="mini">Artículo</div><input class="a-prod up" value="'+q(d.producto)+'" placeholder="Producto"></div>'+
+      '<div><div class="mini">Color/modelo</div><input class="a-color up" value="'+q(d.color_modelo)+'" placeholder="Color o modelo"></div></div>'+
     '<div class="r4" style="margin-top:8px">'+
-      '<div><div class="mini">Cantidad</div><input class="a-cant" type="number" step="0.01" min="0" value="'+(d.cantidad!=null?d.cantidad:'')+'"></div>'+
-      '<div><div class="mini">Tipo</div><input class="a-unid" value="'+q(d.unidad)+'" placeholder="M/PZ"></div>'+
-      '<div><div class="mini">Precio</div><input class="a-precio" type="number" step="0.01" min="0" value="'+(d.precio!=null&&d.precio!==''?d.precio:'')+'"></div>'+
-      '<div><div class="mini">Importe</div><input class="a-imp" type="number" step="0.01" min="0" value="'+(d.importe!=null&&d.importe!==''?d.importe:'')+'"></div></div>';
+      '<div><div class="mini">Cantidad</div><input class="a-cant" type="number" step="0.01" min="0" value="'+(d.cantidad!=null?d.cantidad:'')+'" oninput="recalcFilaS(this)"></div>'+
+      '<div><div class="mini">Tipo</div><input class="a-unid up" value="'+q(d.unidad)+'" placeholder="M/PZ"></div>'+
+      '<div><div class="mini">Precio</div><input class="a-precio" type="number" step="0.01" min="0" value="'+(d.precio!=null&&d.precio!==''?d.precio:'')+'" oninput="recalcFilaS(this)"></div>'+
+      '<div><div class="mini">Importe</div><input class="a-imp ro" type="number" readonly value="'+(impIni!==''?impIni:'')+'"></div></div>';
   document.getElementById('arts').appendChild(div); renum();
 }
-function quitarArt(btn){ btn.closest('.art').remove(); renum(); }
+function quitarArt(btn){ btn.closest('.art').remove(); renum(); recalcTotalS(); }
+function recalcFilaS(inp){
+  var row=inp.closest('.art');
+  var c=parseFloat(row.querySelector('.a-cant').value);
+  var p=parseFloat(row.querySelector('.a-precio').value);
+  row.querySelector('.a-imp').value=(!isNaN(c)&&!isNaN(p))?(Math.round(c*p*100)/100):'';
+  recalcTotalS();
+}
+function recalcTotalS(){
+  var t=0;
+  document.querySelectorAll('#arts .a-imp').forEach(function(el){ var v=parseFloat(el.value); if(!isNaN(v)) t+=v; });
+  document.getElementById('e-total').value = t>0 ? (Math.round(t*100)/100) : '';
+}
 function leerArts(){
   var out=[];
   document.querySelectorAll('#arts .art').forEach(function(l,i){
@@ -182,8 +202,8 @@ function leerArts(){
     var cant=l.querySelector('.a-cant').value;
     if (!prod && cant==='') return;
     var pr=l.querySelector('.a-precio').value, im=l.querySelector('.a-imp').value;
-    out.push({ orden:i+1, producto:prod, color_modelo:l.querySelector('.a-color').value.trim()||null,
-      cantidad: cant===''?null:parseFloat(cant), unidad:l.querySelector('.a-unid').value.trim()||null,
+    out.push({ orden:i+1, producto:prod.toUpperCase(), color_modelo:(l.querySelector('.a-color').value.trim().toUpperCase())||null,
+      cantidad: cant===''?null:parseFloat(cant), unidad:(l.querySelector('.a-unid').value.trim().toUpperCase())||null,
       precio: pr===''?null:parseFloat(pr), importe: im===''?null:parseFloat(im) });
   });
   return out;
