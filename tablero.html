@@ -127,7 +127,7 @@ var ESTADOS = [
 ];
 var TIPOS = { no_hay:'No hay', tienda:'Recoge en tienda', domicilio:'Domicilio' };
 var COMPROB = { factura:'Factura', ticket:'Ticket', nota_g:'Nota G', factura_cxc:'Factura CXC' };
-var PAGOS = { efectivo:'Efectivo', transferencia:'Transferencia', tarjeta:'Tarjeta', deposito_efectivo:'Depósito en efectivo' };
+var PAGOS = { efectivo:'Efectivo', transferencia:'Transferencia', tarjeta:'Tarjeta', deposito_efectivo:'Depósito en efectivo', cxc:'CXC (crédito)' };
 
 function estadoInfo(v){
   for (var i=0;i<ESTADOS.length;i++){ if (ESTADOS[i][0]===v) return ESTADOS[i]; }
@@ -230,7 +230,6 @@ function render(){
       '<div class="p-datos">'+
         '<div><span>Comprobante:</span> '+(COMPROB[p.tipo_comprobante]||'—')+'</div>'+
         '<div><span>Pago:</span> '+(PAGOS[p.forma_pago]||'—')+'</div>'+
-        '<div><span>Entrega est.:</span> '+(p.fecha_entrega_est||'—')+'</div>'+
         '<div><span>Total ticket:</span> '+money(p.total_ticket)+'</div>'+
         '<div><span>Capturista:</span> '+esc(p.capturado_por||'—')+'</div>'+
         '<div><span>Despachador:</span> '+(p.despachador_numero ? (esc(p.despachador_numero)+(p.despachador_nombre?(' · '+esc(p.despachador_nombre)):'')) : '—')+'</div>'+
@@ -274,7 +273,7 @@ function siguientes(tipo, estatus, preasignado){
       case 'por_asignar':      r=[p('asignado')]; break;
       case 'asignado':         r=[p('surtiendo')]; break;
       case 'surtiendo':        r=[p('listo')]; break;
-      case 'listo':            r=[['entregado','Entregado (recoge en tienda)'], ['en_camioneta','Pasar a reparto a domicilio']]; break;
+      case 'listo':            r=[['entregado','Entregado (recoge en tienda)']]; break;
       case 'en_camioneta':     r=[p('en_ruta')]; break;
       case 'en_ruta':          r=[p('entregado')]; break;
     }
@@ -284,9 +283,9 @@ function siguientes(tipo, estatus, preasignado){
       case 'por_asignar':  r=[p('asignado')]; break;
       case 'asignado':     r=[p('surtiendo')]; break;
       case 'surtiendo':    r=[p('listo')]; break;
-      case 'listo':        r=[p('en_camioneta')]; break;
-      case 'en_camioneta': r=[p('en_ruta')]; break;
-      case 'en_ruta':      r=[p('entregado')]; break;
+      case 'listo':        return []; // ya listo: lo toma el encargado de carga o el chofer
+      case 'en_camioneta': return [];
+      case 'en_ruta':      return [];
     }
   } else { // tienda y cualquier otro
     switch(estatus){
