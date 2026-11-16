@@ -127,7 +127,8 @@ function tomar(id){
     .then(function(r){
       if (r.error){ showToast('Error al tomar: '+r.error.message,'lose'); return; }
       if (!r.data || !r.data.length){ showToast('Otro despachador lo tomó primero.','lose'); cargar(); return; }
-      showToast('¡Pedido tomado! Ve a "Mis pedidos" para surtirlo.','win'); cargar();
+      showToast('¡Pedido tomado! Abriendo para surtir…','win');
+      setTimeout(function(){ location.href='surtido.html'; }, 600);
     })
     .catch(function(e){ showToast('Falló: '+(e&&e.message?e.message:e),'lose'); });
 }
