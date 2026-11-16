@@ -65,7 +65,11 @@
   .ac-list.on{display:block}
   .ac-item{padding:9px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f4f9;color:#1c2a3a}
   .ac-item:hover{background:#eef5ff}
+  .ac-item.sel{background:#dde9fb}
   .ac-item small{color:#6b7d95}
+  .up{text-transform:uppercase}
+  .btn-color{background:#5c6b82;font-size:12px;padding:7px 10px;margin-top:8px}
+  .readonly{background:#f1f4f8;color:#44607f;font-weight:600}
 </style>
 </head>
 <body>
@@ -83,17 +87,17 @@
     <h2>Nuevo pedido</h2>
 
     <label>Capturista</label>
-    <input type="text" id="ft-capturista" placeholder="Tu nombre" />
+    <input type="text" id="ft-capturista" class="readonly" readonly placeholder="(tu usuario)" />
 
     <label>Buscar cliente (del catálogo)</label>
     <div class="ac-wrap">
-      <input type="text" id="ft-buscar-cliente" autocomplete="off" placeholder="Escribe el nombre y elígelo…" oninput="buscarCliente(this.value)" onblur="setTimeout(cerrarCli,150)" />
+      <input type="text" id="ft-buscar-cliente" class="up" autocomplete="off" placeholder="Escribe el nombre y elígelo…" oninput="buscarCliente(this.value)" onkeydown="navAC(event,this,'cli')" onblur="setTimeout(cerrarCli,150)" />
       <div class="ac-list" id="ft-cli-list"></div>
     </div>
-    <div style="font-size:11px;color:#6b7d95;margin:2px 0 0">Si no aparece, captúralo a mano abajo (se registra en tu POS como siempre).</div>
+    <div style="font-size:11px;color:#6b7d95;margin:2px 0 0">Si no aparece, captúralo a mano abajo (se registra en tu POS como siempre). Muévete con ↑ ↓ y elige con Enter.</div>
 
     <label style="margin-top:10px">Nombre del cliente *</label>
-    <input type="text" id="ft-cliente" placeholder="Ej. Maria Lopez" />
+    <input type="text" id="ft-cliente" class="up" placeholder="Ej. MARIA LOPEZ" />
 
     <label style="color:#1F3864">Contacto <span style="font-weight:400;color:#791F1F">(al menos uno)</span></label>
     <div class="form-row">
@@ -131,21 +135,19 @@
           <option value="transferencia">Transferencia</option>
           <option value="tarjeta">Tarjeta</option>
           <option value="deposito_efectivo">Deposito en efectivo</option>
+          <option value="cxc">CXC (crédito, firma de recibido)</option>
         </select>
       </div>
     </div>
-
-    <label style="margin-top:12px">Fecha estimada de entrega</label>
-    <input type="date" id="ft-fecha-entrega-est" />
 
     <label style="margin-top:12px">Despachador (opcional)</label>
     <select id="ft-despachador"><option value="">Dejar libre (se asigna después)</option></select>
 
     <div id="ft-dir-bloque" class="hidden" style="margin-top:12px;padding:12px;border:1px solid #cdd9e8;border-radius:10px;background:#f8fbff">
       <label style="margin-top:0;color:#1F3864">Dirección de entrega *</label>
-      <input type="text" id="ft-direccion" placeholder="Calle, número, colonia" />
+      <input type="text" id="ft-direccion" class="up" placeholder="Calle, número, colonia, municipio, estado, CP" />
       <label style="margin-top:10px">Referencias</label>
-      <input type="text" id="ft-referencias" placeholder="Entre calles, cómo llegar, señas" />
+      <input type="text" id="ft-referencias" class="up" placeholder="Entre calles, cómo llegar, señas" />
     </div>
 
     <label style="margin-top:16px;color:#1F3864">Ticket del punto de venta</label>
@@ -171,10 +173,11 @@
     <div style="font-size:11px;color:#777;margin:2px 0 8px">Indica color o modelo en cada articulo.</div>
     <div id="ft-articulos"></div>
 
-    <label style="margin-top:14px">Total del ticket</label>
-    <input type="number" id="ft-total" placeholder="$" min="0" step="0.01" />
+    <label style="margin-top:14px">Total del ticket <span style="font-weight:400;color:#6b7d95">(suma automática)</span></label>
+    <input type="number" id="ft-total" class="readonly" placeholder="$" readonly />
 
     <button class="btn btn-primary" style="margin-top:16px" onclick="guardarPedidoTel()" id="btn-guardar-tel">Guardar pedido</button>
+    <a href="tablero.html" class="btn" style="display:block;text-align:center;width:100%;margin-top:10px;background:#1F3864">Ir al tablero</a>
   </div>
 </div>
 
@@ -230,9 +233,34 @@ function cargarDespachadores(){
     r.data.forEach(function(d){ var o=document.createElement('option'); o.value=d.numero; o.textContent=d.numero+(d.nombre?(' · '+d.nombre):''); sel.appendChild(o); });
   });
 }
-protegerRol(sb, ['oficina','admin'], function(){ cargarDespachadores(); cargarProductos(); });
+var MI_NUM='';
+protegerRol(sb, ['oficina','admin'], function(yo){
+  MI_NUM = (yo && yo.numero) ? yo.numero : '';
+  var cap=document.getElementById('ft-capturista'); if(cap) cap.value=MI_NUM;
+  cargarDespachadores(); cargarProductos();
+});
 
 function escH(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* Navegación con flechas ↑ ↓ y Enter en los buscadores */
+function navAC(e, inp, kind){
+  var list = (kind==='cli') ? document.getElementById('ft-cli-list') : inp.parentNode.querySelector('.ac-list');
+  if(!list || !list.classList.contains('on')) return;
+  var items = Array.prototype.slice.call(list.querySelectorAll('.ac-item')).filter(function(it){ return it.getAttribute('onmousedown'); });
+  if(!items.length) return;
+  var ai = (typeof list._ai==='number') ? list._ai : -1;
+  if(e.key==='ArrowDown'){ e.preventDefault(); ai=(ai+1)%items.length; }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); ai=(ai-1+items.length)%items.length; }
+  else if(e.key==='Enter'){
+    if(ai>=0 && ai<items.length){ e.preventDefault(); (new Function(items[ai].getAttribute('onmousedown'))).call(items[ai]); list.classList.remove('on'); list._ai=-1; }
+    return;
+  }
+  else if(e.key==='Escape'){ list.classList.remove('on'); list._ai=-1; return; }
+  else return;
+  list._ai=ai;
+  items.forEach(function(it,k){ it.classList.toggle('sel', k===ai); });
+  items[ai].scrollIntoView({block:'nearest'});
+}
 
 /* ===== Buscador de cliente (catálogo del POS, solo lectura) ===== */
 var CLI_RES=[], CLI_TMR=null;
@@ -242,11 +270,11 @@ function buscarCliente(q){
   if(!sb || q.length<2){ list.classList.remove('on'); list.innerHTML=''; return; }
   if(CLI_TMR) clearTimeout(CLI_TMR);
   CLI_TMR=setTimeout(function(){
-    sb.from('clientes').select('registro,nombre,telefono1,telefono2,celular1,celular2,email1,direccion')
+    sb.from('clientes').select('registro,nombre,telefono1,telefono2,celular1,celular2,email1,direccion,cp')
       .ilike('nombre','%'+q+'%').order('nombre').limit(8)
       .then(function(r){
         if(r.error||!r.data){ list.classList.remove('on'); return; }
-        CLI_RES=r.data;
+        CLI_RES=r.data; list._ai=-1;
         if(!r.data.length){ list.innerHTML='<div class="ac-item" style="color:#6b7d95;cursor:default">Sin coincidencias — captúralo a mano abajo</div>'; list.classList.add('on'); return; }
         list.innerHTML=r.data.map(function(c,i){
           var tel=c.telefono1||c.celular1||'';
@@ -262,7 +290,7 @@ function elegirCliente(i){
   document.getElementById('ft-telefono').value=c.telefono1||c.telefono2||'';
   document.getElementById('ft-whatsapp').value=c.celular1||c.celular2||'';
   document.getElementById('ft-correo').value=c.email1||'';
-  if(c.direccion) document.getElementById('ft-direccion').value=c.direccion;
+  if(c.direccion) document.getElementById('ft-direccion').value=(c.direccion||'').trim();
   document.getElementById('ft-buscar-cliente').value=c.nombre||'';
   cerrarCli();
 }
@@ -288,6 +316,7 @@ function acProd(inp){
   list.innerHTML=res.map(function(p){
     return '<div class="ac-item" onmousedown="acElegir(this)" data-nom="'+escH(p.nombre)+'" data-uni="'+escH(p.unidad||'')+'"><b>'+escH(p.nombre)+'</b>'+(p.unidad?(' <small>'+escH(p.unidad)+'</small>'):'')+'</div>';
   }).join('');
+  list._ai=-1;
   list.classList.add('on');
 }
 function acElegir(item){
@@ -344,28 +373,67 @@ function agregarLineaArt(data){
   var div = document.createElement('div');
   div.className = 'art-linea';
   function q(v){ return v!=null ? String(v).replace(/"/g,'&quot;') : ''; }
+  // importe inicial = cantidad x precio (si hay ambos)
+  var impIni='';
+  if(data.cantidad!=null && data.cantidad!=='' && data.precio!=null && data.precio!==''){
+    var ii=parseFloat(data.cantidad)*parseFloat(data.precio);
+    if(!isNaN(ii)) impIni=Math.round(ii*100)/100;
+  }
   div.innerHTML =
     '<div class="art-head"><span class="art-num"></span>'+
       '<button class="btn btn-sm btn-danger" onclick="quitarLineaArt(this)">Quitar</button></div>'+
     '<div class="art-row-2">'+
       '<div><div class="art-mini-lbl">Articulo</div>'+
-        '<div class="ac-wrap"><input type="text" class="art-prod" autocomplete="off" placeholder="Producto / descripcion" value="'+(data.producto?q(data.producto):'')+'" oninput="acProd(this)" onblur="acCerrar(this)">'+
+        '<div class="ac-wrap"><input type="text" class="art-prod up" autocomplete="off" placeholder="Producto / descripcion" value="'+(data.producto?q(data.producto):'')+'" oninput="acProd(this)" onkeydown="navAC(event,this,\'prod\')" onblur="acCerrar(this)">'+
         '<div class="ac-list"></div></div></div>'+
       '<div><div class="art-mini-lbl">Color o modelo</div>'+
-        '<input type="text" class="art-color" placeholder="Color o modelo" value="'+(data.colorModelo?q(data.colorModelo):'')+'"></div>'+
+        '<input type="text" class="art-color up" placeholder="Color o modelo" value="'+(data.colorModelo?q(data.colorModelo):'')+'"></div>'+
     '</div>'+
     '<div class="art-row-4" style="margin-top:8px">'+
       '<div><div class="art-mini-lbl">Cantidad</div>'+
-        '<input type="number" class="art-cant" placeholder="Cant." min="0" step="0.01" value="'+(data.cantidad!=null?data.cantidad:'')+'"></div>'+
+        '<input type="number" class="art-cant" placeholder="Cant." min="0" step="0.01" value="'+(data.cantidad!=null?data.cantidad:'')+'" oninput="recalcFila(this)"></div>'+
       '<div><div class="art-mini-lbl">Tipo</div>'+
-        '<input type="text" class="art-unid" placeholder="Tipo/Unidad" value="'+(data.unidad?q(data.unidad):'')+'"></div>'+
+        '<input type="text" class="art-unid up" placeholder="Tipo/Unidad" value="'+(data.unidad?q(data.unidad):'')+'"></div>'+
       '<div><div class="art-mini-lbl">Precio</div>'+
-        '<input type="number" class="art-precio" placeholder="$" min="0" step="0.01" value="'+(data.precio!=null&&data.precio!==''?data.precio:'')+'"></div>'+
+        '<input type="number" class="art-precio" placeholder="$" min="0" step="0.01" value="'+(data.precio!=null&&data.precio!==''?data.precio:'')+'" oninput="recalcFila(this)"></div>'+
       '<div><div class="art-mini-lbl">Importe</div>'+
-        '<input type="number" class="art-importe" placeholder="$" min="0" step="0.01" value="'+(data.importe!=null&&data.importe!==''?data.importe:'')+'"></div>'+
-    '</div>';
+        '<input type="number" class="art-importe readonly" placeholder="$" readonly value="'+(impIni!==''?impIni:'')+'"></div>'+
+    '</div>'+
+    '<button class="btn btn-color" onclick="agregarOtroColor(this)">+ Agregar otro color de este artículo</button>';
   cont.appendChild(div);
   renumerarArt();
+}
+/* importe = cantidad x precio; luego recalcula el total */
+function recalcFila(inp){
+  var row=inp.closest('.art-linea');
+  var c=parseFloat(row.querySelector('.art-cant').value);
+  var p=parseFloat(row.querySelector('.art-precio').value);
+  var imp=row.querySelector('.art-importe');
+  imp.value=(!isNaN(c)&&!isNaN(p))?(Math.round(c*p*100)/100):'';
+  recalcTotal();
+}
+function recalcTotal(){
+  var t=0;
+  document.querySelectorAll('#ft-articulos .art-importe').forEach(function(el){
+    var v=parseFloat(el.value); if(!isNaN(v)) t+=v;
+  });
+  document.getElementById('ft-total').value = t>0 ? (Math.round(t*100)/100) : '';
+}
+function recalcTodo(){
+  document.querySelectorAll('#ft-articulos .art-linea').forEach(function(row){
+    var c=parseFloat(row.querySelector('.art-cant').value);
+    var p=parseFloat(row.querySelector('.art-precio').value);
+    var imp=row.querySelector('.art-importe');
+    imp.value=(!isNaN(c)&&!isNaN(p))?(Math.round(c*p*100)/100):'';
+  });
+  recalcTotal();
+}
+/* duplica el artículo dejando sólo el nombre precapturado */
+function agregarOtroColor(btn){
+  var row=btn.closest('.art-linea');
+  var prod=row.querySelector('.art-prod').value.trim();
+  agregarLineaArt({ producto:prod });
+  recalcTotal();
 }
 function quitarLineaArt(btn){ btn.closest('.art-linea').remove(); renumerarArt(); }
 function quitarLineasVaciasArt(){
@@ -379,9 +447,9 @@ function leerLineasArt(){
   var arts=[];
   document.querySelectorAll('#ft-articulos .art-linea').forEach(function(l){
     var cantidad=parseFloat(l.querySelector('.art-cant').value);
-    var producto=l.querySelector('.art-prod').value.trim();
-    var unidad=l.querySelector('.art-unid').value.trim();
-    var colorModelo=l.querySelector('.art-color').value.trim();
+    var producto=l.querySelector('.art-prod').value.trim().toUpperCase();
+    var unidad=l.querySelector('.art-unid').value.trim().toUpperCase();
+    var colorModelo=l.querySelector('.art-color').value.trim().toUpperCase();
     var pr=l.querySelector('.art-precio').value, im=l.querySelector('.art-importe').value;
     var precio = pr==='' ? '' : parseFloat(pr);
     var importe = im==='' ? '' : parseFloat(im);
@@ -445,7 +513,7 @@ function procesarFotoTicket(d, origen){
         if (!arts.length) agregarLineaArt();
       }
 
-      if (data.total !== '' && data.total != null) document.getElementById('ft-total').value = data.total;
+      recalcTodo(); // importe = cantidad x precio, total = suma (ignora el total del OCR)
 
       var totalLineas = document.querySelectorAll('#ft-articulos .art-linea').length;
       var aviso = esPantalla
@@ -550,18 +618,17 @@ function terminarPantalla(){
 
 /* ---------- guardar en Supabase ---------- */
 function guardarPedidoTel(){
-  var cliente = document.getElementById('ft-cliente').value.trim();
+  var cliente = document.getElementById('ft-cliente').value.trim().toUpperCase();
   var telefono = document.getElementById('ft-telefono').value.trim();
   var whatsapp = document.getElementById('ft-whatsapp').value.trim();
   var correo = document.getElementById('ft-correo').value.trim();
   var tipo = document.getElementById('ft-tipo').value;
   var comprobante = document.getElementById('ft-comprobante').value;
   var pago = document.getElementById('ft-pago').value;
-  var fechaEst = document.getElementById('ft-fecha-entrega-est').value;
-  var capturista = document.getElementById('ft-capturista').value.trim();
+  var capturista = (document.getElementById('ft-capturista').value.trim() || MI_NUM);
   var totalRaw = document.getElementById('ft-total').value;
-  var direccion = document.getElementById('ft-direccion').value.trim();
-  var referencias = document.getElementById('ft-referencias').value.trim();
+  var direccion = document.getElementById('ft-direccion').value.trim().toUpperCase();
+  var referencias = document.getElementById('ft-referencias').value.trim().toUpperCase();
   var despNum = document.getElementById('ft-despachador').value;
   var despObj = DESP_CAP.filter(function(d){ return d.numero===despNum; })[0];
 
@@ -581,15 +648,15 @@ function guardarPedidoTel(){
   var btn = document.getElementById('btn-guardar-tel');
   btn.textContent = 'Guardando...'; btn.disabled = true;
 
-  // Si se eligió despachador: en existencia va directo a "asignado";
-  // en "no hay" se queda pre-asignado pero pasa primero por la compra (captura).
-  var estatusInicial = 'captura';
-  if (despNum && tipo !== 'no_hay') estatusInicial = 'asignado';
+  // "No hay": pasa por la compra (captura). En existencia: con despachador -> asignado;
+  // sin despachador -> directo a "por asignar" (entra al pool enseguida).
+  var estatusInicial;
+  if (tipo === 'no_hay') estatusInicial = 'captura';
+  else estatusInicial = despNum ? 'asignado' : 'por_asignar';
 
   var cabecera = {
     cliente: cliente, telefono: telefono || null, whatsapp: whatsapp || null, correo: correo || null,
     tipo: tipo, tipo_comprobante: comprobante || null, forma_pago: pago || null,
-    fecha_entrega_est: fechaEst || null,
     direccion: (tipo === 'domicilio' ? (direccion || null) : null),
     referencias: (tipo === 'domicilio' ? (referencias || null) : null),
     total_ticket: (totalRaw === '' ? null : parseFloat(totalRaw)),
@@ -631,7 +698,7 @@ function guardarPedidoTel(){
 }
 
 function limpiarFormTel(){
-  ['ft-cliente','ft-telefono','ft-whatsapp','ft-correo','ft-fecha-entrega-est','ft-total','ft-direccion','ft-referencias'].forEach(function(id){ document.getElementById(id).value=''; });
+  ['ft-cliente','ft-buscar-cliente','ft-telefono','ft-whatsapp','ft-correo','ft-total','ft-direccion','ft-referencias'].forEach(function(id){ document.getElementById(id).value=''; });
   document.getElementById('ft-tipo').value='';
   document.getElementById('ft-despachador').value='';
   document.getElementById('ft-dir-bloque').classList.add('hidden');
